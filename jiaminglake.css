@@ -1,0 +1,919 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0
+}
+
+:root {
+  --forest: #1a3a2e;
+  --peak: #2d5a3d;
+  --trail: #4a8c5c;
+  --cream: #f5f0e8;
+  --text: #2c2c2c;
+  --muted: #666;
+  --accent: #d4a843;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  background: var(--cream);
+  color: var(--text)
+}
+
+.site-header {
+  background: linear-gradient(135deg, var(--forest) 0%, var(--peak) 60%, var(--trail) 100%);
+  color: #fff;
+  padding: 14px 20px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .35);
+  position: relative;
+  z-index: 900;
+}
+
+.header-title h1 {
+  font-size: clamp(1rem, 3vw, 1.4rem);
+  font-weight: 700;
+  letter-spacing: .05em;
+  line-height: 1.3
+}
+
+.header-title p {
+  font-size: .75rem;
+  opacity: .8;
+  margin-top: 2px
+}
+
+.header-stats {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap
+}
+
+.stat {
+  text-align: center
+}
+
+.stat-val {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent)
+}
+
+.stat-lbl {
+  font-size: .65rem;
+  opacity: .75;
+  display: block;
+  margin-top: 1px
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px)
+}
+
+@media(min-width:768px) {
+  .app {
+    flex-direction: row;
+    height: calc(100vh - 60px)
+  }
+}
+
+#map {
+  flex: 1;
+  min-height: 300px
+}
+
+.side {
+  width: 100%;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -2px 0 12px rgba(0, 0, 0, .1);
+  overflow: hidden;
+}
+
+@media(min-width:768px) {
+  .side {
+    width: 340px;
+    min-width: 280px;
+    max-width: 380px
+  }
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 2px solid #eee;
+  background: #fafafa
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 10px 4px;
+  font-size: .78rem;
+  font-weight: 600;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.tab-btn.active {
+  color: var(--peak);
+  border-bottom: 3px solid var(--trail);
+  margin-bottom: -2px
+}
+
+.tab-pane {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  flex-direction: column
+}
+
+.tab-pane.active {
+  display: flex
+}
+
+.chart-wrap {
+  padding: 14px 14px 4px;
+  flex-shrink: 0;
+  position: relative
+}
+
+.chart-wrap h4 {
+  font-size: .8rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px
+}
+
+.chart-hint {
+  font-size: .7rem;
+  color: var(--muted);
+  font-weight: 400
+}
+
+.chart-container {
+  position: relative;
+  height: 150px
+}
+
+#elev-chart {
+  width: 100% !important;
+  height: 150px !important
+}
+
+/* overlay for markers */
+#chart-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible
+}
+
+.wp-list {
+  padding: 0 10px 10px
+}
+
+.day-group {
+  margin-top: 12px
+}
+
+.day-label {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: #fff;
+  padding: 3px 10px;
+  border-radius: 20px;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.wp-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .15s;
+  border: 1px solid transparent;
+  margin-bottom: 4px;
+}
+
+.wp-card:hover,
+.wp-card.active {
+  background: var(--cream);
+  border-color: #ddd
+}
+
+.wp-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .62rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.wp-info {
+  flex: 1;
+  min-width: 0
+}
+
+.wp-name {
+  font-size: .82rem;
+  font-weight: 700;
+  line-height: 1.3
+}
+
+.wp-meta {
+  font-size: .7rem;
+  color: var(--muted);
+  margin-top: 2px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap
+}
+
+.wp-desc {
+  font-size: .72rem;
+  color: #555;
+  margin-top: 3px
+}
+
+.lf-popup-title {
+  font-weight: 700;
+  font-size: .9rem;
+  color: var(--forest);
+  margin-bottom: 4px
+}
+
+.lf-popup-row {
+  font-size: .78rem;
+  color: #444;
+  margin: 2px 0
+}
+
+.lf-popup-desc {
+  font-size: .75rem;
+  color: #666;
+  margin-top: 6px;
+  font-style: italic;
+  border-top: 1px solid #eee;
+  padding-top: 6px
+}
+
+/* Photo Modal Redesign */
+#photo-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
+}
+
+#photo-modal.open {
+  display: flex;
+}
+
+#photo-modal-box {
+  background: #fff;
+  border-radius: 16px;
+  width: 620px;
+  max-width: 92vw;
+  height: 700px;
+  max-height: 90vh;
+  padding: 24px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+  position: relative;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#photo-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+#photo-modal-title-wrap {
+  flex: 1;
+  min-width: 0;
+  padding-right: 48px;
+}
+
+#photo-modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--forest);
+  margin: 0 0 4px 0;
+  line-height: 1.3;
+}
+
+#photo-modal-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 500;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#photo-modal-nav {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-right: 28px;
+}
+
+.wp-nav-btn {
+  background: #f5f5f5;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.wp-nav-btn:hover:not(:disabled) {
+  background: var(--peak);
+  color: #fff;
+  border-color: var(--peak);
+}
+
+.wp-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#photo-modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  color: #aaa;
+  transition: color 0.2s;
+  z-index: 30;
+}
+
+#photo-modal-close:hover {
+  color: #333;
+}
+
+/* 滾動內容區域與滾動條樣式 */
+#photo-modal-scrollable {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+#photo-modal-scrollable::-webkit-scrollbar {
+  width: 6px;
+}
+
+#photo-modal-scrollable::-webkit-scrollbar-track {
+  background: #f8f9fa;
+  border-radius: 3px;
+}
+
+#photo-modal-scrollable::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+#photo-modal-scrollable::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.waypoint-description {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #475569;
+  margin-bottom: 16px;
+  white-space: pre-line;
+}
+
+/* 照片展示區 */
+#photo-modal-img-wrap {
+  position: relative;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  overflow: hidden;
+  height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#photo-modal-img-wrap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.photo-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(15, 23, 42, 0.45);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.25s;
+  z-index: 10;
+}
+
+.photo-nav.prev {
+  left: 12px;
+}
+
+.photo-nav.next {
+  right: 12px;
+}
+
+#photo-modal-img-wrap:hover .photo-nav {
+  opacity: 0.85;
+}
+
+.photo-nav:hover {
+  background: rgba(15, 23, 42, 0.8) !important;
+  opacity: 1 !important;
+  transform: translateY(-50%) scale(1.05);
+}
+
+.photo-delete-floating-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.95rem;
+  opacity: 0;
+  transition: all 0.25s;
+  z-index: 10;
+}
+
+#photo-modal-img-wrap:hover .photo-delete-floating-btn {
+  opacity: 0.7;
+}
+
+.photo-delete-floating-btn:hover {
+  opacity: 1 !important;
+  background: #ef4444;
+  transform: scale(1.05);
+}
+
+.photo-add-floating-btn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  opacity: 0.55;
+  transition: all 0.25s;
+  z-index: 10;
+}
+
+.photo-add-floating-btn:hover {
+  opacity: 1;
+  background: var(--peak);
+  transform: scale(1.05);
+}
+
+.photo-edit-floating-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  opacity: 0.55;
+  transition: all 0.25s;
+  z-index: 10;
+}
+
+.photo-edit-floating-btn:hover {
+  opacity: 1;
+  background: var(--peak);
+  transform: scale(1.05);
+}
+
+#photo-modal-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px 0 14px 0;
+  flex-shrink: 0;
+}
+
+.photo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.photo-dot.active {
+  background: var(--peak);
+  transform: scale(1.2);
+}
+
+.photo-content-wrap {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 16px;
+  border-left: 3px solid var(--trail);
+}
+
+#photo-modal-photo-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #1e293b;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+#photo-modal-photo-body {
+  font-size: 0.8rem;
+  color: #475569;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* 新增照片的彈窗 (Upload Modal) / 編輯地標的彈窗 (Edit Modal) / 編輯照片的彈窗 (Edit Photo Modal) */
+#upload-modal,
+#edit-modal,
+#edit-photo-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+#upload-modal.open,
+#edit-modal.open,
+#edit-photo-modal.open {
+  display: flex;
+}
+
+#upload-modal-box,
+#edit-modal-box,
+#edit-photo-modal-box {
+  background: #fff;
+  border-radius: 16px;
+  width: 440px;
+  max-width: 90vw;
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+  position: relative;
+}
+
+#edit-modal-box {
+  width: 520px;
+}
+
+#upload-modal-close,
+#edit-modal-close,
+#edit-photo-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: #cbd5e1;
+  transition: color 0.2s;
+}
+
+#upload-modal-close:hover,
+#edit-modal-close:hover,
+#edit-photo-modal-close:hover {
+  color: #334155;
+}
+
+#upload-modal h3,
+#edit-modal h3,
+#edit-photo-modal h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--forest);
+  margin: 0 0 18px 0;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.form-group input[type="text"],
+.form-group textarea,
+.form-group input[type="file"],
+.form-group select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.form-group input[type="file"] {
+  border: none;
+  padding: 0;
+}
+
+.form-group input[type="text"]:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: var(--trail);
+  outline: none;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-group textarea.tall {
+  min-height: 220px;
+}
+
+.btn-submit {
+  background: var(--peak);
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 8px;
+  transition: background 0.2s;
+}
+
+.btn-submit:hover {
+  background: var(--forest);
+}
+
+.upload-status {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.upload-status.success {
+  color: #16a34a;
+}
+
+.upload-status.error {
+  color: #ef4444;
+}
+
+/* Fix Leaflet popup close button */
+.leaflet-popup-close-button {
+  pointer-events: auto
+}
+
+.leaflet-popup-close-button a,
+.leaflet-popup-close-button {
+  text-decoration: none !important
+}
+
+a.leaflet-popup-close-button {
+  display: flex;
+  align-items: center;
+  justify-content: center
+}
+
+.drawer-toggle {
+  display: none;
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 950;
+  background: var(--forest);
+  color: #fff;
+  border: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  font-size: 1.4rem;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .3);
+  align-items: center;
+  justify-content: center;
+}
+
+@media(max-width:767px) {
+  .drawer-toggle {
+    display: flex;
+    z-index: 2600;
+  }
+
+  /* 側面板改為右下角按鈕直接切換的全螢幕彈窗，不再是貼底拖曳的抽屜 */
+  .side {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1900;
+    height: auto;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .side.open {
+    display: flex;
+  }
+
+  .tabs {
+    display: none;
+  }
+
+  /* 照片彈窗：縮小字級、圖片比例，讓一屏內能看到所有內容 */
+  #photo-modal-box {
+    padding: 14px;
+    height: auto;
+  }
+
+  #photo-modal-header {
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+  }
+
+  #photo-modal-title-wrap {
+    padding-right: 8px;
+  }
+
+  #photo-modal-title {
+    font-size: 1rem;
+    margin-bottom: 2px;
+  }
+
+  #photo-modal-meta {
+    font-size: 0.68rem;
+    gap: 8px;
+  }
+
+  #photo-modal-nav {
+    gap: 4px;
+    margin-right: 0;
+  }
+
+  /* 關閉按鈕改回正常排版流，避免與編輯／上一點下一點按鈕重疊 */
+  #photo-modal-close {
+    position: static;
+    top: auto;
+    right: auto;
+    margin-left: 6px;
+    flex-shrink: 0;
+    font-size: 1.1rem;
+  }
+
+  .wp-nav-btn {
+    font-size: 0.9rem;
+    padding: 4px 7px;
+  }
+
+  .wp-nav-label {
+    display: none;
+  }
+
+  .waypoint-description {
+    font-size: 0.76rem;
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  #photo-modal-img-wrap {
+    height: 180px;
+  }
+
+  #photo-modal-dots {
+    margin: 6px 0 8px 0;
+  }
+
+  .photo-content-wrap {
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  #photo-modal-photo-title {
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+  }
+
+  #photo-modal-photo-body {
+    font-size: 0.72rem;
+    line-height: 1.5;
+  }
+
+  /* 頂部標題區：只保留一行標題，隱藏副標題與統計數字 */
+  .site-header {
+    padding: 10px 14px;
+  }
+
+  .header-title p,
+  .header-stats {
+    display: none;
+  }
+
+  .app {
+    height: calc(100vh - 42px);
+  }
+}
