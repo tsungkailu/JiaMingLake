@@ -241,6 +241,11 @@ var WAYPOINT_DATA = {
           "src": "photos/新武呂溪營地_1785086197903.webp",
           "title": "777",
           "body": "777"
+        },
+        {
+          "src": "photos/新武呂溪營地_1785086963663.webp",
+          "title": "4213",
+          "body": "3131"
         }
       ],
       "spur": false,
