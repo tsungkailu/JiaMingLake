@@ -115,7 +115,7 @@ var WAYPOINT_DATA = {
       "profile_km": 0,
       "profile_ele": 200,
       "title": "陳仔豆漿",
-      "desc": "",
+      "desc": "一早起床，揹起裝備",
       "photos": [
         {
           "src": "photos/陳仔豆漿_1785085956647.webp",
