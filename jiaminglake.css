@@ -789,6 +789,39 @@ a.leaflet-popup-close-button {
   justify-content: center
 }
 
+.sync-error-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3000;
+  background: #7f1d1d;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 90vw;
+}
+
+.sync-error-toast button {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.sync-error-toast button:hover {
+  opacity: 1;
+}
+
 .drawer-toggle {
   display: none;
   position: fixed;

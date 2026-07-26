@@ -67,6 +67,20 @@ function resolveApiUrl(path){
   return CLOUD_API_BASE + path;
 }
 
+// 背景同步失敗時的提示（畫面上已經套用了本地變更，這裡只是告知「還沒真的存進雲端」）
+function showSyncErrorToast(message){
+  var toast = document.createElement('div');
+  toast.className = 'sync-error-toast';
+  toast.textContent = '⚠️ ' + message;
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.setAttribute('aria-label', '關閉提示');
+  closeBtn.addEventListener('click', function(){ toast.remove(); });
+  toast.appendChild(closeBtn);
+  document.body.appendChild(toast);
+  setTimeout(function(){ toast.remove(); }, 8000);
+}
+
 // =====================================================================
 // BOOT
 // =====================================================================
@@ -107,7 +121,9 @@ function resolveApiUrl(path){
       spurReturn:  wp.spurReturn  || false
     });
     WAYPOINT_PHOTOS[wp.order] = (wp.photos || []).map(function(p){
-      return { src: p.src || '', title: p.title || '', body: p.body || '' };
+      // _realSrc：這張照片在 repo 裡實際的檔案路徑，用來識別「編輯/刪除哪一張」。
+      // 剛上傳、還在背景同步中的照片，_realSrc 會是 null，代表還不能編輯/刪除。
+      return { src: p.src || '', title: p.title || '', body: p.body || '', _realSrc: p.src || '' };
     });
   });
 
@@ -408,6 +424,18 @@ function updateElevDetail(){
 }
 
 // 高度剖面彈窗自己的照片區塊 (與照片彈窗各自獨立的瀏覽狀態)
+function showEmptyElevPhoto(){
+  document.getElementById('elev-photo-delete-btn').style.display = 'none';
+  document.getElementById('elev-photo-edit-btn').style.display   = 'none';
+  document.getElementById('elev-photo-img').src = '';
+  document.getElementById('elev-photo-img').alt = '暫無照片';
+  document.getElementById('elev-photo-dots').innerHTML = '';
+  document.getElementById('elev-photo-title').textContent = '尚未新增照片';
+  document.getElementById('elev-photo-body').textContent  = '請點擊左上角按鈕新增照片至此地標。';
+  document.getElementById('elev-photo-prev').style.display = 'none';
+  document.getElementById('elev-photo-next').style.display = 'none';
+}
+
 function loadElevPhotoSection(wp){
   var photos = WAYPOINT_PHOTOS[wp.order] || [];
   currentElevPhotos        = photos;
@@ -416,15 +444,7 @@ function loadElevPhotoSection(wp){
   currentElevWaypointOrder = wp.order;
 
   if(photos.length === 0){
-    document.getElementById('elev-photo-delete-btn').style.display = 'none';
-    document.getElementById('elev-photo-edit-btn').style.display   = 'none';
-    document.getElementById('elev-photo-img').src = '';
-    document.getElementById('elev-photo-img').alt = '暫無照片';
-    document.getElementById('elev-photo-dots').innerHTML = '';
-    document.getElementById('elev-photo-title').textContent = '尚未新增照片';
-    document.getElementById('elev-photo-body').textContent  = '請點擊左上角按鈕新增照片至此地標。';
-    document.getElementById('elev-photo-prev').style.display = 'none';
-    document.getElementById('elev-photo-next').style.display = 'none';
+    showEmptyElevPhoto();
   } else {
     renderElevPhoto();
     document.getElementById('elev-photo-prev').style.display = photos.length > 1 ? 'flex' : 'none';
@@ -569,7 +589,9 @@ function compressDataUrlToWebp(dataUrl, callback){
   img.src = dataUrl;
 }
 
-// 請伺服器下載一個公開的 Google Drive 檔案分享連結，回傳圖片的 data URL
+// 請伺服器下載一個公開的 Google Drive 檔案分享連結，回傳圖片的 data URL。
+// Worker 會直接把圖片位元組串流回來（成功時 Content-Type 是 image/*），
+// 失敗時才會是一段 JSON 錯誤訊息。
 function fetchDriveImageAsDataUrl(driveUrl, onSuccess, onError){
   var apiUrl = resolveApiUrl('/api/fetch-drive-image');
   fetch(apiUrl, {
@@ -577,12 +599,22 @@ function fetchDriveImageAsDataUrl(driveUrl, onSuccess, onError){
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: driveUrl })
   })
-  .then(function(res){ return res.json(); })
   .then(function(res){
-    if(res.success){ onSuccess(res.dataUrl); }
-    else { onError(res.error); }
+    var contentType = res.headers.get('content-type') || '';
+    if (!res.ok || contentType.indexOf('application/json') === 0) {
+      return res.json().then(function(errRes){
+        throw new Error(errRes.error || ('HTTP ' + res.status));
+      });
+    }
+    return res.blob();
   })
-  .catch(function(err){ onError(String(err)); });
+  .then(function(blob){
+    var reader = new FileReader();
+    reader.onload = function(e){ onSuccess(e.target.result); };
+    reader.onerror = function(){ onError('讀取圖片資料失敗'); };
+    reader.readAsDataURL(blob);
+  })
+  .catch(function(err){ onError(err.message || String(err)); });
 }
 
 function resetUploadForm(){
@@ -667,7 +699,11 @@ function initPhotoModal(){
     activePhotoSource = source;
     var photo = getActivePhotos()[getActivePhotoIdx()];
     if(!photo) return;
-    editingPhotoSrc = photo.src;
+    if(!photo._realSrc){
+      alert('這張照片還在同步到 GitHub 中，請稍等一下再編輯。');
+      return;
+    }
+    editingPhotoSrc = photo._realSrc;
     document.getElementById('edit-photo-image').value = '';
     document.getElementById('edit-photo-drive-url').value = '';
     document.getElementById('edit-photo-title').value = photo.title || '';
@@ -792,10 +828,22 @@ function initPhotoModal(){
         statusEl.className = 'upload-status';
 
         compressDataUrlToWebp(dataUrl, function(webpBase64){
-          statusEl.textContent = '⏳ 正在發送至本機伺服器...';
-
           var titleVal = document.getElementById('upload-title').value.trim();
           var bodyVal  = document.getElementById('upload-body').value.trim();
+          var waypointName  = getActiveWaypointName();
+          var waypointOrder = getActiveWaypointOrder();
+
+          // ── Optimistic UI：不等雲端同步，先把照片加進本地資料立刻顯示 ──
+          var newPhoto = { src: webpBase64, title: titleVal, body: bodyVal, _realSrc: null };
+          if (!WAYPOINT_PHOTOS[waypointOrder]) WAYPOINT_PHOTOS[waypointOrder] = [];
+          WAYPOINT_PHOTOS[waypointOrder].push(newPhoto);
+          refreshActivePhotoView(WAYPOINT_PHOTOS[waypointOrder].length - 1);
+
+          statusEl.textContent = '✅ 已顯示在畫面上！背景同步到 GitHub 中...';
+          statusEl.className = 'upload-status success';
+          setTimeout(function(){
+            uploadModal.classList.remove('open');
+          }, 600);
 
           var uploadUrl = resolveApiUrl('/api/upload');
 
@@ -803,8 +851,8 @@ function initPhotoModal(){
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              waypointName: getActiveWaypointName(),
-              waypointOrder: getActiveWaypointOrder(),
+              waypointName: waypointName,
+              waypointOrder: waypointOrder,
               title: titleVal,
               body: bodyVal,
               image: webpBase64
@@ -813,19 +861,13 @@ function initPhotoModal(){
           .then(function(res){ return res.json(); })
           .then(function(res){
             if(res.success){
-              statusEl.textContent = '🎉 上傳成功！網頁即將重新整理...';
-              statusEl.className = 'upload-status success';
-              setTimeout(function(){
-                window.location.reload();
-              }, 1200);
+              newPhoto._realSrc = res.src;
             } else {
-              statusEl.textContent = '❌ 上傳失敗: ' + res.error;
-              statusEl.className = 'upload-status error';
+              showSyncErrorToast('照片同步到 GitHub 失敗（畫面上仍看得到，但重新整理後會消失）: ' + res.error);
             }
           })
           .catch(function(err){
-            statusEl.textContent = '❌ 連線伺服器失敗: ' + err;
-            statusEl.className = 'upload-status error';
+            showSyncErrorToast('照片同步到 GitHub 失敗（畫面上仍看得到，但重新整理後會消失）: ' + err);
           });
         });
       }
@@ -847,15 +889,26 @@ function initPhotoModal(){
   }
 
   // ── 照片刪除邏輯 (照片彈窗、高度剖面照片區共用) ────────────────────
-  function deleteActivePhoto(bodyElId){
-    var photo = getActivePhotos()[getActivePhotoIdx()];
+  function deleteActivePhoto(){
+    var photos = getActivePhotos();
+    var idx = getActivePhotoIdx();
+    var photo = photos[idx];
     if (!photo) return;
+
+    if (!photo._realSrc) {
+      alert('這張照片還在同步到 GitHub 中，請稍等一下再刪除。');
+      return;
+    }
 
     var isConfirmed = confirm("確定要刪除這張照片嗎？\n這將會從檔案庫中永久刪除此照片且無法復原！");
     if (!isConfirmed) return;
 
-    var statusEl = document.getElementById(bodyElId);
-    statusEl.textContent = '⏳ 正在向伺服器發送刪除請求...';
+    // ── Optimistic UI：不等雲端同步，先從畫面上移除 ──
+    var waypointName  = getActiveWaypointName();
+    var waypointOrder = getActiveWaypointOrder();
+    var photoSrc = photo._realSrc;
+    photos.splice(idx, 1);
+    refreshActivePhotoView(idx);
 
     var deleteUrl = resolveApiUrl('/api/delete-photo');
 
@@ -863,24 +916,19 @@ function initPhotoModal(){
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        waypointName: getActiveWaypointName(),
-        waypointOrder: getActiveWaypointOrder(),
-        photoSrc: photo.src
+        waypointName: waypointName,
+        waypointOrder: waypointOrder,
+        photoSrc: photoSrc
       })
     })
     .then(function(res){ return res.json(); })
     .then(function(res){
-      if(res.success){
-        statusEl.textContent = '🎉 照片刪除成功！網頁即將重新整理...';
-        setTimeout(function(){
-          window.location.reload();
-        }, 1200);
-      } else {
-        statusEl.textContent = '❌ 刪除失敗: ' + res.error;
+      if(!res.success){
+        showSyncErrorToast('刪除同步到 GitHub 失敗: ' + res.error);
       }
     })
     .catch(function(err){
-      statusEl.textContent = '❌ 連線伺服器失敗: ' + err;
+      showSyncErrorToast('刪除同步到 GitHub 失敗: ' + err);
     });
   }
 
@@ -888,14 +936,14 @@ function initPhotoModal(){
   if (btnDelete) {
     btnDelete.addEventListener('click', function(){
       activePhotoSource = 'modal';
-      deleteActivePhoto('photo-modal-photo-body');
+      deleteActivePhoto();
     });
   }
   var elevPhotoDeleteBtn = document.getElementById('elev-photo-delete-btn');
   if (elevPhotoDeleteBtn) {
     elevPhotoDeleteBtn.addEventListener('click', function(){
       activePhotoSource = 'elev';
-      deleteActivePhoto('elev-photo-body');
+      deleteActivePhoto();
     });
   }
 
@@ -967,8 +1015,21 @@ function initPhotoModal(){
       var file       = fileInput.files[0];
 
       function sendPhotoUpdate(webpBase64){
-        statusEl.textContent = '⏳ 正在儲存修改...';
-        statusEl.className = 'upload-status';
+        var photos = getActivePhotos();
+        var photo = photos.find(function(p){ return p._realSrc === editingPhotoSrc; });
+        if(!photo) return;
+
+        // ── Optimistic UI：不等雲端同步，先套用修改立刻顯示 ──
+        photo.title = titleVal;
+        photo.body  = bodyVal;
+        if (webpBase64) photo.src = webpBase64;
+        refreshActivePhotoView(photos.indexOf(photo));
+
+        statusEl.textContent = '✅ 已套用修改！背景同步到 GitHub 中...';
+        statusEl.className = 'upload-status success';
+        setTimeout(function(){
+          editPhotoModal.classList.remove('open');
+        }, 600);
 
         var updateUrl = resolveApiUrl('/api/update-photo');
 
@@ -988,20 +1049,12 @@ function initPhotoModal(){
         })
         .then(function(res){ return res.json(); })
         .then(function(res){
-          if(res.success){
-            statusEl.textContent = '🎉 更新成功！網頁即將重新整理...';
-            statusEl.className = 'upload-status success';
-            setTimeout(function(){
-              window.location.reload();
-            }, 1000);
-          } else {
-            statusEl.textContent = '❌ 更新失敗: ' + res.error;
-            statusEl.className = 'upload-status error';
+          if(!res.success){
+            showSyncErrorToast('照片編輯同步到 GitHub 失敗: ' + res.error);
           }
         })
         .catch(function(err){
-          statusEl.textContent = '❌ 連線伺服器失敗: ' + err;
-          statusEl.className = 'upload-status error';
+          showSyncErrorToast('照片編輯同步到 GitHub 失敗: ' + err);
         });
       }
 
@@ -1062,21 +1115,45 @@ function openPhotoModal(wp){
   if(nextBtn) nextBtn.disabled = (currIdx < 0 || currIdx >= WAYPOINTS.length - 1);
 
   if(photos.length === 0){
-    document.getElementById('photo-modal-delete-btn').style.display = 'none';
-    document.getElementById('photo-modal-edit-btn').style.display   = 'none';
-    document.getElementById('photo-modal-img').src        = '';
-    document.getElementById('photo-modal-img').alt        = '暫無照片';
-    document.getElementById('photo-modal-dots').innerHTML  = '';
-    document.getElementById('photo-modal-photo-title').textContent = '尚未新增照片';
-    document.getElementById('photo-modal-photo-body').textContent  = '請點擊下方按鈕新增照片至此地標。';
-    document.getElementById('photo-prev').style.display = 'none';
-    document.getElementById('photo-next').style.display = 'none';
+    showEmptyPhotoModal();
   } else {
     renderPhoto();
     document.getElementById('photo-prev').style.display = photos.length > 1 ? 'flex' : 'none';
     document.getElementById('photo-next').style.display = photos.length > 1 ? 'flex' : 'none';
   }
   photoModal.classList.add('open');
+}
+
+function showEmptyPhotoModal(){
+  document.getElementById('photo-modal-delete-btn').style.display = 'none';
+  document.getElementById('photo-modal-edit-btn').style.display   = 'none';
+  document.getElementById('photo-modal-img').src        = '';
+  document.getElementById('photo-modal-img').alt        = '暫無照片';
+  document.getElementById('photo-modal-dots').innerHTML  = '';
+  document.getElementById('photo-modal-photo-title').textContent = '尚未新增照片';
+  document.getElementById('photo-modal-photo-body').textContent  = '請點擊下方按鈕新增照片至此地標。';
+  document.getElementById('photo-prev').style.display = 'none';
+  document.getElementById('photo-next').style.display = 'none';
+}
+
+// Optimistic UI：新增/編輯/刪除照片後，立刻用目前 WAYPOINT_PHOTOS 的內容重繪
+// 當前開啟中的照片檢視區塊 (照片彈窗或高度剖面照片區)，不必等雲端同步、不必整頁重新整理
+function refreshActivePhotoView(targetIdx){
+  if (activePhotoSource === 'elev') {
+    currentElevPhotos = WAYPOINT_PHOTOS[currentElevWaypointOrder] || [];
+    if (currentElevPhotos.length === 0) { showEmptyElevPhoto(); return; }
+    currentElevPhotoIdx = Math.max(0, Math.min(targetIdx, currentElevPhotos.length - 1));
+    document.getElementById('elev-photo-prev').style.display = currentElevPhotos.length > 1 ? 'flex' : 'none';
+    document.getElementById('elev-photo-next').style.display = currentElevPhotos.length > 1 ? 'flex' : 'none';
+    renderElevPhoto();
+  } else {
+    currentPhotos = WAYPOINT_PHOTOS[currentWaypointOrder] || [];
+    if (currentPhotos.length === 0) { showEmptyPhotoModal(); return; }
+    currentPhotoIdx = Math.max(0, Math.min(targetIdx, currentPhotos.length - 1));
+    document.getElementById('photo-prev').style.display = currentPhotos.length > 1 ? 'flex' : 'none';
+    document.getElementById('photo-next').style.display = currentPhotos.length > 1 ? 'flex' : 'none';
+    renderPhoto();
+  }
 }
 
 function renderPhoto(){
