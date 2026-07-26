@@ -1,4 +1,5 @@
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -10,6 +11,76 @@ const PHOTOS_DIR = path.join(PUBLIC_DIR, 'photos');
 // 確保 photos 資料夾存在
 if (!fs.existsSync(PHOTOS_DIR)) {
   fs.mkdirSync(PHOTOS_DIR, { recursive: true });
+}
+
+// 從各種 Google Drive 分享連結格式中解析出檔案 ID
+function extractDriveFileId(url) {
+  var m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(url.trim())) return url.trim();
+  return null;
+}
+
+// 下載 Google Drive 公開檔案 (不需要 API 金鑰)，並自動處理重新導向與
+// 「檔案過大，Google 無法掃描病毒」的確認頁面
+function downloadFromDrive(url, cookies, redirectsLeft, callback) {
+  if (redirectsLeft < 0) {
+    callback(new Error('重新導向次數過多'));
+    return;
+  }
+  var headers = {};
+  if (cookies.length) headers['Cookie'] = cookies.join('; ');
+
+  https.get(url, { headers: headers }, function (res) {
+    var newCookies = cookies;
+    if (res.headers['set-cookie']) {
+      newCookies = cookies.concat(res.headers['set-cookie'].map(function (c) { return c.split(';')[0]; }));
+    }
+
+    if ([301, 302, 303, 307, 308].indexOf(res.statusCode) >= 0 && res.headers.location) {
+      res.resume();
+      var nextUrl = new URL(res.headers.location, url).toString();
+      downloadFromDrive(nextUrl, newCookies, redirectsLeft - 1, callback);
+      return;
+    }
+
+    if (res.statusCode !== 200) {
+      res.resume();
+      callback(new Error('下載失敗，HTTP 狀態碼: ' + res.statusCode));
+      return;
+    }
+
+    var contentType = res.headers['content-type'] || '';
+    var chunks = [];
+    res.on('data', function (c) { chunks.push(c); });
+    res.on('end', function () {
+      var buffer = Buffer.concat(chunks);
+
+      if (contentType.indexOf('image/') === 0) {
+        callback(null, { contentType: contentType.split(';')[0], buffer: buffer });
+        return;
+      }
+
+      // 檔案較大時 Google 會回傳一個確認頁面，嘗試解析 confirm token 後重試一次
+      if (contentType.indexOf('text/html') === 0 && redirectsLeft > 0) {
+        var html = buffer.toString('utf-8');
+        var confirmMatch = html.match(/confirm=([0-9A-Za-z_]+)/);
+        var idMatch = html.match(/name="id" value="([^"]+)"/);
+        if (confirmMatch) {
+          var fileId = idMatch ? idMatch[1] : null;
+          var retryUrl = fileId
+            ? 'https://drive.google.com/uc?export=download&confirm=' + confirmMatch[1] + '&id=' + fileId
+            : url + (url.indexOf('?') >= 0 ? '&' : '?') + 'confirm=' + confirmMatch[1];
+          downloadFromDrive(retryUrl, newCookies, redirectsLeft - 1, callback);
+          return;
+        }
+      }
+
+      callback(new Error('無法從連結取得圖片，請確認該檔案已設定為「知道連結的使用者」可檢視'));
+    });
+  }).on('error', function (err) { callback(err); });
 }
 
 const MIME_TYPES = {
@@ -37,6 +108,50 @@ const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
+    return;
+  }
+
+  // 處理從 Google Drive 分享連結下載圖片的 API (不需要 API 金鑰，僅支援單一公開檔案連結)
+  if (req.method === 'POST' && req.url === '/api/fetch-drive-image') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body);
+        const rawUrl = (payload.url || '').trim();
+
+        if (!rawUrl) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: '請提供 Google Drive 分享連結' }));
+          return;
+        }
+
+        const fileId = extractDriveFileId(rawUrl);
+        if (!fileId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: '無法從連結解析出檔案 ID，請確認是單一檔案的分享連結' }));
+          return;
+        }
+
+        const downloadUrl = 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(fileId);
+        downloadFromDrive(downloadUrl, [], 5, (err, result) => {
+          if (err) {
+            console.error('[Server] 雲端硬碟下載錯誤:', err);
+            res.writeHead(502, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: err.message }));
+            return;
+          }
+          const base64 = result.buffer.toString('base64');
+          console.log(`[Server] 已從 Google Drive 下載圖片: id=${fileId}, ${result.buffer.length} bytes`);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, dataUrl: `data:${result.contentType};base64,${base64}` }));
+        });
+      } catch (err) {
+        console.error('[Server] 雲端硬碟下載錯誤:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
     return;
   }
 

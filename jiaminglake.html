@@ -47,8 +47,29 @@
             <div id="elev-wp-name" style="font-size:.95rem;font-weight:700;color:var(--forest);line-height:1.3;"></div>
             <div id="elev-wp-meta" style="font-size:.72rem;color:var(--muted);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;"></div>
           </div>
+          <div class="elev-wp-nav">
+            <button id="elev-nav-prev" class="wp-nav-btn" aria-label="上一點">‹<span class="wp-nav-label"> 上一點</span></button>
+            <button id="elev-nav-next" class="wp-nav-btn" aria-label="下一點"><span class="wp-nav-label">下一點 </span>›</button>
+          </div>
         </div>
         <div id="elev-wp-desc" style="font-size:.78rem;color:#444;line-height:1.7;"></div>
+
+        <!-- 高度剖面彈窗自己的照片區塊 (與照片彈窗各自獨立) -->
+        <div style="margin-top:14px;">
+          <div id="elev-photo-img-wrap" class="photo-img-wrap">
+            <button class="photo-nav prev" id="elev-photo-prev" aria-label="上一張">&#8249;</button>
+            <img id="elev-photo-img" src="" alt="">
+            <button class="photo-nav next" id="elev-photo-next" aria-label="下一張">&#8250;</button>
+            <button id="elev-photo-add-btn" class="photo-add-floating-btn" title="新增此標記點的照片">➕</button>
+            <button id="elev-photo-edit-btn" class="photo-edit-floating-btn" title="編輯這張照片">✏️</button>
+            <button id="elev-photo-delete-btn" class="photo-delete-floating-btn" title="刪除此張照片">🗑</button>
+          </div>
+          <div id="elev-photo-dots" class="photo-dots-row"></div>
+          <div class="photo-content-wrap">
+            <div id="elev-photo-title"></div>
+            <div id="elev-photo-body"></div>
+          </div>
+        </div>
       </div>
       <div id="elev-wp-empty" style="padding:24px 14px;text-align:center;color:var(--muted);font-size:.78rem;flex:1;display:flex;align-items:center;justify-content:center;">
         👆 點擊任一地標，在此查看詳細資訊
@@ -81,7 +102,7 @@
       <div id="photo-modal-desc" class="waypoint-description"></div>
 
       <!-- 照片展示區 -->
-      <div id="photo-modal-img-wrap">
+      <div id="photo-modal-img-wrap" class="photo-img-wrap">
         <button class="photo-nav prev" id="photo-prev" aria-label="上一張">&#8249;</button>
         <img id="photo-modal-img" src="" alt="">
         <button class="photo-nav next" id="photo-next" aria-label="下一張">&#8250;</button>
@@ -94,7 +115,7 @@
       </div>
 
       <!-- 點點 (盡量貼近照片) -->
-      <div id="photo-modal-dots"></div>
+      <div id="photo-modal-dots" class="photo-dots-row"></div>
 
       <!-- 照片標題與照片段落文案 (貼近照片) -->
       <div class="photo-content-wrap">
@@ -113,6 +134,10 @@
     <div class="form-group">
       <label for="upload-image">選擇照片</label>
       <input type="file" id="upload-image" accept="image/*" />
+    </div>
+    <div class="form-group">
+      <label for="upload-drive-url">或貼上 Google Drive 檔案分享連結（選填，二擇一）</label>
+      <input type="text" id="upload-drive-url" placeholder="https://drive.google.com/file/d/xxxx/view" />
     </div>
     <div class="form-group">
       <label for="upload-title">照片標題</label>
@@ -175,6 +200,10 @@
     <div class="form-group">
       <label for="edit-photo-image">更換照片（選填，留空則保留原圖）</label>
       <input type="file" id="edit-photo-image" accept="image/*" />
+    </div>
+    <div class="form-group">
+      <label for="edit-photo-drive-url">或貼上 Google Drive 檔案分享連結（選填，二擇一）</label>
+      <input type="text" id="edit-photo-drive-url" placeholder="https://drive.google.com/file/d/xxxx/view" />
     </div>
     <div class="form-group">
       <label for="edit-photo-title">照片標題</label>

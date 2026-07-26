@@ -30,6 +30,27 @@ var currentWaypointName = '';
 var currentWaypointOrder = null;
 var editingPhotoSrc = null;
 
+// ---- Elevation popup's own (independent) photo section state ----
+var currentElevPhotos = [];
+var currentElevPhotoIdx = 0;
+var currentElevWaypointName = '';
+var currentElevWaypointOrder = null;
+
+// 上傳／編輯／刪除三個共用彈窗，依目前是被「照片彈窗」還是「高度剖面照片區」開啟而定
+var activePhotoSource = 'modal'; // 'modal' | 'elev'
+function getActivePhotos(){
+  return activePhotoSource === 'elev' ? currentElevPhotos : currentPhotos;
+}
+function getActivePhotoIdx(){
+  return activePhotoSource === 'elev' ? currentElevPhotoIdx : currentPhotoIdx;
+}
+function getActiveWaypointName(){
+  return activePhotoSource === 'elev' ? currentElevWaypointName : currentWaypointName;
+}
+function getActiveWaypointOrder(){
+  return activePhotoSource === 'elev' ? currentElevWaypointOrder : currentWaypointOrder;
+}
+
 // ---- Day display order ----
 var DAY_ORDER = ['D0','D1','D2','D3','D4'];
 
@@ -317,8 +338,21 @@ function toggleChartMarker(wp){
     if(idx >= 0){ activeMarkers.splice(idx, 1); }
     else         { activeMarkers.push({wp: wp}); }
   }
+  updateElevHint();
+  updateElevDetail();
+  requestAnimationFrame(redrawOverlay);
+}
 
-  // Update hint
+// 高度剖面彈窗的上一點／下一點導覽：直接切換成單一標記點 (取代原本的多選標記)
+function selectElevWaypoint(wp){
+  buildChart();
+  activeMarkers = [{wp: wp}];
+  updateElevHint();
+  updateElevDetail();
+  requestAnimationFrame(redrawOverlay);
+}
+
+function updateElevHint(){
   var hint = document.getElementById('chart-hint');
   if(activeMarkers.length > 0){
     hint.textContent = '📍 ' + activeMarkers.map(function(m){ return m.wp.name; }).join('、');
@@ -327,8 +361,9 @@ function toggleChartMarker(wp){
     hint.textContent = '點擊地標可標記於此';
     hint.style.color = 'var(--muted)';
   }
+}
 
-  // Update elevation detail panel
+function updateElevDetail(){
   var detail = document.getElementById('elev-wp-detail');
   var empty  = document.getElementById('elev-wp-empty');
   if(activeMarkers.length > 0){
@@ -345,12 +380,62 @@ function toggleChartMarker(wp){
     document.getElementById('elev-wp-desc').textContent = sel.desc;
     detail.style.display = 'block';
     empty.style.display  = 'none';
+
+    var currIdx = WAYPOINTS.findIndex(function(w){ return w.order === sel.order; });
+    var prevBtn = document.getElementById('elev-nav-prev');
+    var nextBtn = document.getElementById('elev-nav-next');
+    prevBtn.disabled = (currIdx <= 0);
+    nextBtn.disabled = (currIdx < 0 || currIdx >= WAYPOINTS.length - 1);
+
+    loadElevPhotoSection(sel);
   } else {
     detail.style.display = 'none';
     empty.style.display  = 'flex';
   }
+}
 
-  requestAnimationFrame(redrawOverlay);
+// 高度剖面彈窗自己的照片區塊 (與照片彈窗各自獨立的瀏覽狀態)
+function loadElevPhotoSection(wp){
+  var photos = WAYPOINT_PHOTOS[wp.order] || [];
+  currentElevPhotos        = photos;
+  currentElevPhotoIdx      = 0;
+  currentElevWaypointName  = wp.name;
+  currentElevWaypointOrder = wp.order;
+
+  if(photos.length === 0){
+    document.getElementById('elev-photo-delete-btn').style.display = 'none';
+    document.getElementById('elev-photo-edit-btn').style.display   = 'none';
+    document.getElementById('elev-photo-img').src = '';
+    document.getElementById('elev-photo-img').alt = '暫無照片';
+    document.getElementById('elev-photo-dots').innerHTML = '';
+    document.getElementById('elev-photo-title').textContent = '尚未新增照片';
+    document.getElementById('elev-photo-body').textContent  = '請點擊左上角按鈕新增照片至此地標。';
+    document.getElementById('elev-photo-prev').style.display = 'none';
+    document.getElementById('elev-photo-next').style.display = 'none';
+  } else {
+    renderElevPhoto();
+    document.getElementById('elev-photo-prev').style.display = photos.length > 1 ? 'flex' : 'none';
+    document.getElementById('elev-photo-next').style.display = photos.length > 1 ? 'flex' : 'none';
+  }
+}
+
+function renderElevPhoto(){
+  var p = currentElevPhotos[currentElevPhotoIdx];
+  document.getElementById('elev-photo-delete-btn').style.display = 'flex';
+  document.getElementById('elev-photo-edit-btn').style.display   = 'flex';
+  document.getElementById('elev-photo-img').src = p.src;
+  document.getElementById('elev-photo-img').alt = p.title || '';
+  document.getElementById('elev-photo-title').textContent = p.title || '';
+  document.getElementById('elev-photo-body').textContent  = p.body  || '';
+
+  var dotsEl = document.getElementById('elev-photo-dots');
+  dotsEl.innerHTML = '';
+  currentElevPhotos.forEach(function(_, idx){
+    var dot = document.createElement('div');
+    dot.className = 'photo-dot' + (idx === currentElevPhotoIdx ? ' active' : '');
+    dot.addEventListener('click', function(){ currentElevPhotoIdx = idx; renderElevPhoto(); });
+    dotsEl.appendChild(dot);
+  });
 }
 
 window.addEventListener('resize', function(){
@@ -438,32 +523,65 @@ function buildWaypointList(){
 function compressImageToWebp(file, callback){
   var reader = new FileReader();
   reader.onload = function(e){
-    var img = new Image();
-    img.onload = function(){
-      var maxDim = 1200;
-      var width = img.width;
-      var height = img.height;
-      if(width > maxDim || height > maxDim){
-        if(width > height){
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-      }
-
-      var canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-
-      callback(canvas.toDataURL('image/webp', 0.82));
-    };
-    img.src = e.target.result;
+    compressDataUrlToWebp(e.target.result, callback);
   };
   reader.readAsDataURL(file);
+}
+
+// 與上面共用的核心壓縮邏輯，輸入直接是圖片的 data URL (例如從雲端硬碟下載後取得的圖片)
+function compressDataUrlToWebp(dataUrl, callback){
+  var img = new Image();
+  img.onload = function(){
+    var maxDim = 1200;
+    var width = img.width;
+    var height = img.height;
+    if(width > maxDim || height > maxDim){
+      if(width > height){
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+    }
+
+    var canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, width, height);
+
+    callback(canvas.toDataURL('image/webp', 0.82));
+  };
+  img.src = dataUrl;
+}
+
+// 請伺服器下載一個公開的 Google Drive 檔案分享連結，回傳圖片的 data URL
+function fetchDriveImageAsDataUrl(driveUrl, onSuccess, onError){
+  var apiUrl = '/api/fetch-drive-image';
+  if (window.location.port !== '8000') {
+    apiUrl = 'http://localhost:8000/api/fetch-drive-image';
+  }
+  fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: driveUrl })
+  })
+  .then(function(res){ return res.json(); })
+  .then(function(res){
+    if(res.success){ onSuccess(res.dataUrl); }
+    else { onError(res.error); }
+  })
+  .catch(function(err){ onError(String(err)); });
+}
+
+function resetUploadForm(){
+  document.getElementById('upload-image').value = '';
+  document.getElementById('upload-drive-url').value = '';
+  document.getElementById('upload-title').value = '';
+  document.getElementById('upload-body').value = '';
+  document.getElementById('upload-status').textContent = '';
+  document.getElementById('upload-status').className = 'upload-status';
 }
 
 function initPhotoModal(){
@@ -482,6 +600,16 @@ function initPhotoModal(){
   var btnOpenUpload = document.getElementById('btn-open-upload-modal');
   if (btnOpenUpload) {
     btnOpenUpload.addEventListener('click', function(){
+      activePhotoSource = 'modal';
+      resetUploadForm();
+      uploadModal.classList.add('open');
+    });
+  }
+  var elevPhotoAddBtn = document.getElementById('elev-photo-add-btn');
+  if (elevPhotoAddBtn) {
+    elevPhotoAddBtn.addEventListener('click', function(){
+      activePhotoSource = 'elev';
+      resetUploadForm();
       uploadModal.classList.add('open');
     });
   }
@@ -525,19 +653,26 @@ function initPhotoModal(){
 
   // 編輯照片彈窗控制
   var editPhotoModal = document.getElementById('edit-photo-modal');
+  function openEditPhotoModal(source){
+    activePhotoSource = source;
+    var photo = getActivePhotos()[getActivePhotoIdx()];
+    if(!photo) return;
+    editingPhotoSrc = photo.src;
+    document.getElementById('edit-photo-image').value = '';
+    document.getElementById('edit-photo-drive-url').value = '';
+    document.getElementById('edit-photo-title').value = photo.title || '';
+    document.getElementById('edit-photo-body').value  = photo.body  || '';
+    document.getElementById('edit-photo-status').textContent = '';
+    document.getElementById('edit-photo-status').className  = 'upload-status';
+    editPhotoModal.classList.add('open');
+  }
   var btnOpenEditPhoto = document.getElementById('photo-modal-edit-btn');
   if (btnOpenEditPhoto) {
-    btnOpenEditPhoto.addEventListener('click', function(){
-      var photo = currentPhotos[currentPhotoIdx];
-      if(!photo) return;
-      editingPhotoSrc = photo.src;
-      document.getElementById('edit-photo-image').value = '';
-      document.getElementById('edit-photo-title').value = photo.title || '';
-      document.getElementById('edit-photo-body').value  = photo.body  || '';
-      document.getElementById('edit-photo-status').textContent = '';
-      document.getElementById('edit-photo-status').className  = 'upload-status';
-      editPhotoModal.classList.add('open');
-    });
+    btnOpenEditPhoto.addEventListener('click', function(){ openEditPhotoModal('modal'); });
+  }
+  var elevPhotoEditBtn = document.getElementById('elev-photo-edit-btn');
+  if (elevPhotoEditBtn) {
+    elevPhotoEditBtn.addEventListener('click', function(){ openEditPhotoModal('elev'); });
   }
   var btnCloseEditPhoto = document.getElementById('edit-photo-modal-close');
   if (btnCloseEditPhoto) {
@@ -563,6 +698,24 @@ function initPhotoModal(){
     }
   });
 
+  // 高度剖面彈窗的上一點 / 下一點地標導覽 (與照片彈窗各自獨立)
+  document.getElementById('elev-nav-prev').addEventListener('click', function(){
+    var sel = activeMarkers.length > 0 ? activeMarkers[activeMarkers.length - 1].wp : null;
+    if(!sel) return;
+    var currIdx = WAYPOINTS.findIndex(function(w){ return w.order === sel.order; });
+    if(currIdx > 0){
+      selectElevWaypoint(WAYPOINTS[currIdx - 1]);
+    }
+  });
+  document.getElementById('elev-nav-next').addEventListener('click', function(){
+    var sel = activeMarkers.length > 0 ? activeMarkers[activeMarkers.length - 1].wp : null;
+    if(!sel) return;
+    var currIdx = WAYPOINTS.findIndex(function(w){ return w.order === sel.order; });
+    if(currIdx >= 0 && currIdx < WAYPOINTS.length - 1){
+      selectElevWaypoint(WAYPOINTS[currIdx + 1]);
+    }
+  });
+
   // 照片切換
   document.getElementById('photo-prev').addEventListener('click', function(){
     if(currentPhotos.length < 2) return;
@@ -573,6 +726,16 @@ function initPhotoModal(){
     if(currentPhotos.length < 2) return;
     currentPhotoIdx = (currentPhotoIdx + 1) % currentPhotos.length;
     renderPhoto();
+  });
+  document.getElementById('elev-photo-prev').addEventListener('click', function(){
+    if(currentElevPhotos.length < 2) return;
+    currentElevPhotoIdx = (currentElevPhotoIdx - 1 + currentElevPhotos.length) % currentElevPhotos.length;
+    renderElevPhoto();
+  });
+  document.getElementById('elev-photo-next').addEventListener('click', function(){
+    if(currentElevPhotos.length < 2) return;
+    currentElevPhotoIdx = (currentElevPhotoIdx + 1) % currentElevPhotos.length;
+    renderElevPhoto();
   });
   document.addEventListener('keydown', function(e){
     if(uploadModal.classList.contains('open')) {
@@ -600,108 +763,135 @@ function initPhotoModal(){
 
   if (btnSubmit) {
     btnSubmit.addEventListener('click', function(){
-      var file = fileInput.files[0];
-      if(!file){
-        statusEl.textContent = '❌ 請先選擇一張照片';
+      var file     = fileInput.files[0];
+      var driveUrl = document.getElementById('upload-drive-url').value.trim();
+
+      if(!file && !driveUrl){
+        statusEl.textContent = '❌ 請選擇一張照片，或貼上 Google Drive 分享連結';
         statusEl.className = 'upload-status error';
         return;
       }
-      if(!currentWaypointName){
+      if(!getActiveWaypointName()){
         statusEl.textContent = '❌ 無法辨識當前地標';
         statusEl.className = 'upload-status error';
         return;
       }
 
-      statusEl.textContent = '⏳ 正在壓縮圖片中...';
-      statusEl.className = 'upload-status';
+      function proceedWithDataUrl(dataUrl){
+        statusEl.textContent = '⏳ 正在壓縮圖片中...';
+        statusEl.className = 'upload-status';
 
-      compressImageToWebp(file, function(webpBase64){
-        statusEl.textContent = '⏳ 正在發送至本機伺服器...';
+        compressDataUrlToWebp(dataUrl, function(webpBase64){
+          statusEl.textContent = '⏳ 正在發送至本機伺服器...';
 
-        var titleVal = document.getElementById('upload-title').value.trim();
-        var bodyVal  = document.getElementById('upload-body').value.trim();
+          var titleVal = document.getElementById('upload-title').value.trim();
+          var bodyVal  = document.getElementById('upload-body').value.trim();
 
-        var uploadUrl = '/api/upload';
-        if (window.location.port !== '8000') {
-          uploadUrl = 'http://localhost:8000/api/upload';
-        }
-
-        fetch(uploadUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            waypointName: currentWaypointName,
-            waypointOrder: currentWaypointOrder,
-            title: titleVal,
-            body: bodyVal,
-            image: webpBase64
-          })
-        })
-        .then(function(res){ return res.json(); })
-        .then(function(res){
-          if(res.success){
-            statusEl.textContent = '🎉 上傳成功！網頁即將重新整理...';
-            statusEl.className = 'upload-status success';
-            fileInput.value = '';
-            document.getElementById('upload-title').value = '';
-            document.getElementById('upload-body').value = '';
-            setTimeout(function(){
-              window.location.reload();
-            }, 1200);
-          } else {
-            statusEl.textContent = '❌ 上傳失敗: ' + res.error;
-            statusEl.className = 'upload-status error';
+          var uploadUrl = '/api/upload';
+          if (window.location.port !== '8000') {
+            uploadUrl = 'http://localhost:8000/api/upload';
           }
-        })
-        .catch(function(err){
-          statusEl.textContent = '❌ 連線伺服器失敗: ' + err;
-          statusEl.className = 'upload-status error';
+
+          fetch(uploadUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              waypointName: getActiveWaypointName(),
+              waypointOrder: getActiveWaypointOrder(),
+              title: titleVal,
+              body: bodyVal,
+              image: webpBase64
+            })
+          })
+          .then(function(res){ return res.json(); })
+          .then(function(res){
+            if(res.success){
+              statusEl.textContent = '🎉 上傳成功！網頁即將重新整理...';
+              statusEl.className = 'upload-status success';
+              setTimeout(function(){
+                window.location.reload();
+              }, 1200);
+            } else {
+              statusEl.textContent = '❌ 上傳失敗: ' + res.error;
+              statusEl.className = 'upload-status error';
+            }
+          })
+          .catch(function(err){
+            statusEl.textContent = '❌ 連線伺服器失敗: ' + err;
+            statusEl.className = 'upload-status error';
+          });
         });
+      }
+
+      if(file){
+        var reader = new FileReader();
+        reader.onload = function(e){ proceedWithDataUrl(e.target.result); };
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      statusEl.textContent = '⏳ 正在從 Google Drive 下載圖片...';
+      statusEl.className = 'upload-status';
+      fetchDriveImageAsDataUrl(driveUrl, proceedWithDataUrl, function(err){
+        statusEl.textContent = '❌ 下載失敗: ' + err;
+        statusEl.className = 'upload-status error';
       });
     });
   }
 
-  // ── 照片刪除邏輯 ─────────────────────────────────────────────────
+  // ── 照片刪除邏輯 (照片彈窗、高度剖面照片區共用) ────────────────────
+  function deleteActivePhoto(bodyElId){
+    var photo = getActivePhotos()[getActivePhotoIdx()];
+    if (!photo) return;
+
+    var isConfirmed = confirm("確定要刪除這張照片嗎？\n這將會從檔案庫中永久刪除此照片且無法復原！");
+    if (!isConfirmed) return;
+
+    var statusEl = document.getElementById(bodyElId);
+    statusEl.textContent = '⏳ 正在向伺服器發送刪除請求...';
+
+    var deleteUrl = '/api/delete-photo';
+    if (window.location.port !== '8000') {
+      deleteUrl = 'http://localhost:8000/api/delete-photo';
+    }
+
+    fetch(deleteUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        waypointName: getActiveWaypointName(),
+        waypointOrder: getActiveWaypointOrder(),
+        photoSrc: photo.src
+      })
+    })
+    .then(function(res){ return res.json(); })
+    .then(function(res){
+      if(res.success){
+        statusEl.textContent = '🎉 照片刪除成功！網頁即將重新整理...';
+        setTimeout(function(){
+          window.location.reload();
+        }, 1200);
+      } else {
+        statusEl.textContent = '❌ 刪除失敗: ' + res.error;
+      }
+    })
+    .catch(function(err){
+      statusEl.textContent = '❌ 連線伺服器失敗: ' + err;
+    });
+  }
+
   var btnDelete = document.getElementById('photo-modal-delete-btn');
   if (btnDelete) {
     btnDelete.addEventListener('click', function(){
-      if (!currentPhotos[currentPhotoIdx]) return;
-      var photo = currentPhotos[currentPhotoIdx];
-      
-      var isConfirmed = confirm("確定要刪除這張照片嗎？\n這將會從檔案庫中永久刪除此照片且無法復原！");
-      if (!isConfirmed) return;
-
-      var statusEl = document.getElementById('photo-modal-photo-body');
-      statusEl.textContent = '⏳ 正在向伺服器發送刪除請求...';
-
-      var deleteUrl = '/api/delete-photo';
-      if (window.location.port !== '8000') {
-        deleteUrl = 'http://localhost:8000/api/delete-photo';
-      }
-
-      fetch(deleteUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          waypointName: currentWaypointName,
-          waypointOrder: currentWaypointOrder,
-          photoSrc: photo.src
-        })
-      })
-      .then(function(res){ return res.json(); })
-      .then(function(res){
-        if(res.success){
-          statusEl.textContent = '🎉 照片刪除成功！網頁即將重新整理...';
-          setTimeout(function(){
-            window.location.reload();
-          }, 1200);
-        } else {
-          statusEl.textContent = '❌ 刪除失敗: ' + res.error;
-        }
-      })
-      .catch(function(err){
-        statusEl.textContent = '❌ 連線伺服器失敗: ' + err;
-      });
+      activePhotoSource = 'modal';
+      deleteActivePhoto('photo-modal-photo-body');
+    });
+  }
+  var elevPhotoDeleteBtn = document.getElementById('elev-photo-delete-btn');
+  if (elevPhotoDeleteBtn) {
+    elevPhotoDeleteBtn.addEventListener('click', function(){
+      activePhotoSource = 'elev';
+      deleteActivePhoto('elev-photo-body');
     });
   }
 
@@ -770,6 +960,7 @@ function initPhotoModal(){
     btnEditPhotoSubmit.addEventListener('click', function(){
       var statusEl   = document.getElementById('edit-photo-status');
       var fileInput  = document.getElementById('edit-photo-image');
+      var driveUrl   = document.getElementById('edit-photo-drive-url').value.trim();
       var titleVal   = document.getElementById('edit-photo-title').value.trim();
       var bodyVal    = document.getElementById('edit-photo-body').value.trim();
       var file       = fileInput.files[0];
@@ -784,8 +975,8 @@ function initPhotoModal(){
         }
 
         var payload = {
-          waypointName: currentWaypointName,
-          waypointOrder: currentWaypointOrder,
+          waypointName: getActiveWaypointName(),
+          waypointOrder: getActiveWaypointOrder(),
           photoSrc: editingPhotoSrc,
           title: titleVal,
           body: bodyVal
@@ -816,14 +1007,31 @@ function initPhotoModal(){
         });
       }
 
-      if(!file){
-        sendPhotoUpdate(null);
+      if(file){
+        var reader = new FileReader();
+        reader.onload = function(e){
+          statusEl.textContent = '⏳ 正在壓縮圖片中...';
+          statusEl.className = 'upload-status';
+          compressDataUrlToWebp(e.target.result, sendPhotoUpdate);
+        };
+        reader.readAsDataURL(file);
         return;
       }
 
-      statusEl.textContent = '⏳ 正在壓縮圖片中...';
-      statusEl.className = 'upload-status';
-      compressImageToWebp(file, sendPhotoUpdate);
+      if(driveUrl){
+        statusEl.textContent = '⏳ 正在從 Google Drive 下載圖片...';
+        statusEl.className = 'upload-status';
+        fetchDriveImageAsDataUrl(driveUrl, function(dataUrl){
+          statusEl.textContent = '⏳ 正在壓縮圖片中...';
+          compressDataUrlToWebp(dataUrl, sendPhotoUpdate);
+        }, function(err){
+          statusEl.textContent = '❌ 下載失敗: ' + err;
+          statusEl.className = 'upload-status error';
+        });
+        return;
+      }
+
+      sendPhotoUpdate(null);
     });
   }
 }
@@ -835,12 +1043,7 @@ function openPhotoModal(wp){
   currentWaypointName = wp.name;
   currentWaypointOrder = wp.order;
 
-  // 重設上傳表單欄位與狀態
-  document.getElementById('upload-image').value = '';
-  document.getElementById('upload-title').value = '';
-  document.getElementById('upload-body').value = '';
-  document.getElementById('upload-status').textContent = '';
-  document.getElementById('upload-status').className = 'upload-status';
+  resetUploadForm();
 
   // 重設置頂滾動條
   var scrollEl = document.getElementById('photo-modal-scrollable');

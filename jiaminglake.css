@@ -358,6 +358,13 @@ body {
   margin-right: 28px;
 }
 
+.elev-wp-nav {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .wp-nav-btn {
   background: #f5f5f5;
   border: 1px solid #e2e8f0;
@@ -432,7 +439,7 @@ body {
 }
 
 /* 照片展示區 */
-#photo-modal-img-wrap {
+.photo-img-wrap {
   position: relative;
   background: #f8fafc;
   border: 1px solid #f1f5f9;
@@ -445,7 +452,7 @@ body {
   flex-shrink: 0;
 }
 
-#photo-modal-img-wrap img {
+.photo-img-wrap img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -480,7 +487,7 @@ body {
   right: 12px;
 }
 
-#photo-modal-img-wrap:hover .photo-nav {
+.photo-img-wrap:hover .photo-nav {
   opacity: 0.85;
 }
 
@@ -511,7 +518,7 @@ body {
   z-index: 10;
 }
 
-#photo-modal-img-wrap:hover .photo-delete-floating-btn {
+.photo-img-wrap:hover .photo-delete-floating-btn {
   opacity: 0.7;
 }
 
@@ -575,7 +582,7 @@ body {
   transform: scale(1.05);
 }
 
-#photo-modal-dots {
+.photo-dots-row {
   display: flex;
   justify-content: center;
   gap: 6px;
@@ -605,7 +612,8 @@ body {
   border-left: 3px solid var(--trail);
 }
 
-#photo-modal-photo-title {
+#photo-modal-photo-title,
+#elev-photo-title {
   font-weight: 700;
   font-size: 0.9rem;
   color: #1e293b;
@@ -613,7 +621,8 @@ body {
   line-height: 1.4;
 }
 
-#photo-modal-photo-body {
+#photo-modal-photo-body,
+#elev-photo-body {
   font-size: 0.8rem;
   color: #475569;
   line-height: 1.6;
@@ -880,11 +889,11 @@ a.leaflet-popup-close-button {
     line-height: 1.5;
   }
 
-  #photo-modal-img-wrap {
+  .photo-img-wrap {
     height: 180px;
   }
 
-  #photo-modal-dots {
+  .photo-dots-row {
     margin: 6px 0 8px 0;
   }
 
@@ -893,12 +902,14 @@ a.leaflet-popup-close-button {
     margin-bottom: 10px;
   }
 
-  #photo-modal-photo-title {
+  #photo-modal-photo-title,
+  #elev-photo-title {
     font-size: 0.8rem;
     margin-bottom: 4px;
   }
 
-  #photo-modal-photo-body {
+  #photo-modal-photo-body,
+  #elev-photo-body {
     font-size: 0.72rem;
     line-height: 1.5;
   }
