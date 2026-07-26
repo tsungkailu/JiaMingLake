@@ -239,7 +239,7 @@ var WAYPOINT_DATA = {
       "profile_km": 6.8,
       "profile_ele": 2771,
       "title": "排球場營地",
-      "desc": "爬升了近半公里後，我們來到了第一個運動場，排球場營地，這裡有平坦鬆軟的泥土地，鋪著舒服的針葉落葉地毯，在間疏有致的森林中，讓人格外覺得放鬆。",
+      "desc": "",
       "photos": [],
       "spur": false,
       "spurReturn": false
