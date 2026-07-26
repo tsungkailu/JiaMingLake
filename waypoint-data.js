@@ -123,11 +123,6 @@ var WAYPOINT_DATA = {
           "body": "ee"
         },
         {
-          "src": "photos/陳仔豆漿_1785085625843.webp",
-          "title": "3313",
-          "body": "13313"
-        },
-        {
           "src": "photos/陳仔豆漿_1785085664542.webp",
           "title": "333",
           "body": "3333"
