@@ -180,6 +180,11 @@ var WAYPOINT_DATA = {
           "src": "photos/戒茂斯登山口_1785082117233.webp",
           "title": "Test",
           "body": "trst"
+        },
+        {
+          "src": "photos/戒茂斯登山口_1785086108405.webp",
+          "title": "新來橋",
+          "body": "新來橋"
         }
       ],
       "spur": false,
