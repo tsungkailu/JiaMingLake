@@ -54,6 +54,19 @@ function getActiveWaypointOrder(){
 // ---- Day display order ----
 var DAY_ORDER = ['D0','D1','D2','D3','D4'];
 
+// ---- API base ----
+// 本機用 node server.js（同 origin，走 8000 port）測試；
+// 部署到 GitHub Pages 等靜態空間時，寫入類 API 一律改打這個 Cloudflare Worker
+// （部署好 worker 後，把下面網址換成你自己的 *.workers.dev 網址）
+var CLOUD_API_BASE = 'https://jiaminglake-api.tsungkailu.workers.dev';
+
+function resolveApiUrl(path){
+  if (window.location.port === '8000') {
+    return path;
+  }
+  return CLOUD_API_BASE + path;
+}
+
 // =====================================================================
 // BOOT
 // =====================================================================
@@ -558,10 +571,7 @@ function compressDataUrlToWebp(dataUrl, callback){
 
 // 請伺服器下載一個公開的 Google Drive 檔案分享連結，回傳圖片的 data URL
 function fetchDriveImageAsDataUrl(driveUrl, onSuccess, onError){
-  var apiUrl = '/api/fetch-drive-image';
-  if (window.location.port !== '8000') {
-    apiUrl = 'http://localhost:8000/api/fetch-drive-image';
-  }
+  var apiUrl = resolveApiUrl('/api/fetch-drive-image');
   fetch(apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -787,10 +797,7 @@ function initPhotoModal(){
           var titleVal = document.getElementById('upload-title').value.trim();
           var bodyVal  = document.getElementById('upload-body').value.trim();
 
-          var uploadUrl = '/api/upload';
-          if (window.location.port !== '8000') {
-            uploadUrl = 'http://localhost:8000/api/upload';
-          }
+          var uploadUrl = resolveApiUrl('/api/upload');
 
           fetch(uploadUrl, {
             method: 'POST',
@@ -850,10 +857,7 @@ function initPhotoModal(){
     var statusEl = document.getElementById(bodyElId);
     statusEl.textContent = '⏳ 正在向伺服器發送刪除請求...';
 
-    var deleteUrl = '/api/delete-photo';
-    if (window.location.port !== '8000') {
-      deleteUrl = 'http://localhost:8000/api/delete-photo';
-    }
+    var deleteUrl = resolveApiUrl('/api/delete-photo');
 
     fetch(deleteUrl, {
       method: 'POST',
@@ -916,10 +920,7 @@ function initPhotoModal(){
       statusEl.textContent = '⏳ 正在儲存修改...';
       statusEl.className = 'upload-status';
 
-      var updateUrl = '/api/update-waypoint';
-      if (window.location.port !== '8000') {
-        updateUrl = 'http://localhost:8000/api/update-waypoint';
-      }
+      var updateUrl = resolveApiUrl('/api/update-waypoint');
 
       fetch(updateUrl, {
         method: 'POST',
@@ -969,10 +970,7 @@ function initPhotoModal(){
         statusEl.textContent = '⏳ 正在儲存修改...';
         statusEl.className = 'upload-status';
 
-        var updateUrl = '/api/update-photo';
-        if (window.location.port !== '8000') {
-          updateUrl = 'http://localhost:8000/api/update-photo';
-        }
+        var updateUrl = resolveApiUrl('/api/update-photo');
 
         var payload = {
           waypointName: getActiveWaypointName(),
@@ -1150,10 +1148,7 @@ function initMobileDrawer(){
 
 // ── 更新地標座標之 API 請求 ─────────────────────────────────────────
 function updateWaypointCoords(name, order, lat, lng) {
-  var updateUrl = '/api/update-coords';
-  if (window.location.port !== '8000') {
-    updateUrl = 'http://localhost:8000/api/update-coords';
-  }
+  var updateUrl = resolveApiUrl('/api/update-coords');
 
   fetch(updateUrl, {
     method: 'POST',
