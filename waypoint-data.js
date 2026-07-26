@@ -121,6 +121,11 @@ var WAYPOINT_DATA = {
           "src": "photos/陳仔豆漿_1785081584730.webp",
           "title": "陳仔豆漿",
           "body": ""
+        },
+        {
+          "src": "photos/陳仔豆漿_1785085594254.webp",
+          "title": "t",
+          "body": "ee"
         }
       ],
       "spur": false,
