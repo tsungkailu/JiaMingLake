@@ -179,6 +179,11 @@ var WAYPOINT_DATA = {
           "src": "photos/戒茂斯前鋒_1785111023441.webp",
           "title": "4444",
           "body": "44444"
+        },
+        {
+          "src": "photos/戒茂斯前鋒_1785115070782.webp",
+          "title": "222",
+          "body": "333"
         }
       ],
       "spur": false,
