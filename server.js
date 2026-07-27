@@ -162,7 +162,7 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const payload = JSON.parse(body);
-        const { waypointName, waypointOrder, title, body: desc, image } = payload;
+        const { waypointName, waypointOrder, title, body: desc, image, ext } = payload;
 
         if ((!waypointName && waypointOrder === undefined) || !image) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -170,13 +170,17 @@ const server = http.createServer((req, res) => {
           return;
         }
 
+        // 前端 canvas 若不支援輸出 webp 會自動退回 png，副檔名要跟著實際內容走
+        const safeExt = /^[a-z0-9]{1,5}$/.test(ext || '') ? ext : 'webp';
+
         // 清理檔名，只保留中英文字元、數字與底線
         const cleanName = waypointName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9_-]/g, '');
-        const filename = `${cleanName}_${Date.now()}.webp`;
+        const filename = `${cleanName}_${Date.now()}.${safeExt}`;
         const filePath = path.join(PHOTOS_DIR, filename);
 
-        // 解密 base64 WebP 圖片資料並存檔
-        const base64Data = image.replace(/^data:image\/webp;base64,/, "");
+        // 解密 base64 圖片資料並存檔
+        // 手機瀏覽器若不支援 canvas 輸出 webp 會自動退回 png，前綴不一定是 image/webp，故改用通用比對
+        const base64Data = image.replace(/^data:[^;]*;base64,/, "");
         fs.writeFileSync(filePath, base64Data, 'base64');
         console.log(`[Server] 已存檔: ${filePath}`);
 
@@ -476,7 +480,7 @@ const server = http.createServer((req, res) => {
             res.end(JSON.stringify({ success: false, error: '不合法的照片路徑' }));
             return;
           }
-          const base64Data = image.replace(/^data:image\/webp;base64,/, "");
+          const base64Data = image.replace(/^data:[^;]*;base64,/, "");
           const baseFilename = path.basename(photoSrc);
           const fullFilePath = path.join(PHOTOS_DIR, baseFilename);
           fs.writeFileSync(fullFilePath, base64Data, 'base64');

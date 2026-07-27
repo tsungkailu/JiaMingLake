@@ -652,7 +652,18 @@ function compressImageToWebp(file, callback){
   reader.readAsDataURL(file);
 }
 
+// 部分瀏覽器 (例如較舊的 Safari) 的 canvas 不支援輸出 webp，toDataURL 會自動退回輸出 png，
+// 這裡從實際產生的 data URL 判斷副檔名，讓伺服器存檔時用對的副檔名，避免內容跟副檔名對不上。
+function extFromDataUrl(dataUrl){
+  var m = dataUrl.match(/^data:image\/([a-zA-Z0-9.+-]+);base64,/);
+  if(!m) return 'webp';
+  var type = m[1].toLowerCase();
+  if(type === 'jpeg') return 'jpg';
+  return /^[a-z0-9]+$/.test(type) ? type : 'webp';
+}
+
 // 與上面共用的核心壓縮邏輯，輸入直接是圖片的 data URL (例如從雲端硬碟下載後取得的圖片)
+// callback(dataUrl, ext)：ext 是實際輸出格式的副檔名 (通常是 webp，不支援時會是 png)
 function compressDataUrlToWebp(dataUrl, callback){
   var img = new Image();
   img.onload = function(){
@@ -675,7 +686,8 @@ function compressDataUrlToWebp(dataUrl, callback){
     var ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0, width, height);
 
-    callback(canvas.toDataURL('image/webp', 0.82));
+    var outDataUrl = canvas.toDataURL('image/webp', 0.82);
+    callback(outDataUrl, extFromDataUrl(outDataUrl));
   };
   img.src = dataUrl;
 }
@@ -918,7 +930,7 @@ function initPhotoModal(){
         statusEl.textContent = '⏳ 正在壓縮圖片中...';
         statusEl.className = 'upload-status';
 
-        compressDataUrlToWebp(dataUrl, function(webpBase64){
+        compressDataUrlToWebp(dataUrl, function(webpBase64, ext){
           var titleVal = document.getElementById('upload-title').value.trim();
           var bodyVal  = document.getElementById('upload-body').value.trim();
           var waypointName  = getActiveWaypointName();
@@ -946,7 +958,8 @@ function initPhotoModal(){
               waypointOrder: waypointOrder,
               title: titleVal,
               body: bodyVal,
-              image: webpBase64
+              image: webpBase64,
+              ext: ext
             })
           })
           .then(function(res){ return res.json(); })
