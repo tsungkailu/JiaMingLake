@@ -486,6 +486,11 @@ var WAYPOINT_DATA = {
           "src": "photos/向陽山_1785111876527.webp",
           "title": "向陽山看日出",
           "body": "向陽山看日出"
+        },
+        {
+          "src": "photos/向陽山_1785111930108.webp",
+          "title": "",
+          "body": ""
         }
       ],
       "spur": true,
