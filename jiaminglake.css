@@ -308,7 +308,7 @@ body {
   width: 620px;
   max-width: 92vw;
   height: 700px;
-  max-height: 90vh;
+  max-height: 80vh;
   padding: 24px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
   position: relative;
@@ -656,27 +656,62 @@ body {
   border-radius: 16px;
   width: 440px;
   max-width: 90vw;
+  max-height: 80vh;
   padding: 24px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 #edit-modal-box {
   width: 520px;
 }
 
+.form-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  margin-bottom: 18px;
+}
+
+.form-modal-scrollable {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  min-height: 0;
+}
+
+/* 儲存鈕與狀態訊息固定在彈窗底部，不隨表單內容捲動 */
+.form-modal-footer {
+  flex-shrink: 0;
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.form-modal-footer .btn-submit {
+  margin-top: 0;
+}
+
 #upload-modal-close,
 #edit-modal-close,
 #edit-photo-modal-close {
-  position: absolute;
-  top: 16px;
-  right: 18px;
   background: none;
   border: none;
   font-size: 1.4rem;
   cursor: pointer;
   color: #cbd5e1;
   transition: color 0.2s;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #upload-modal-close:hover,
@@ -691,11 +726,22 @@ body {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--forest);
-  margin: 0 0 18px 0;
+  margin: 0;
 }
 
 .form-group {
   margin-bottom: 12px;
+}
+
+/* 讓兩個短欄位（例如天數/時間、里程/海拔）並排在同一列，節省彈窗高度 */
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.form-row .form-group {
+  flex: 1;
+  min-width: 0;
 }
 
 .form-group label {
@@ -808,6 +854,10 @@ a.leaflet-popup-close-button {
   max-width: 90vw;
 }
 
+.sync-error-toast.success {
+  background: #14532d;
+}
+
 .sync-error-toast button {
   background: none;
   border: none;
@@ -872,14 +922,18 @@ a.leaflet-popup-close-button {
     height: auto;
   }
 
+  /* 第一行：標題 + 關閉鈕（固定在右上角）；第二行：導覽/編輯鈕獨立一行，與關閉鈕距離拉開避免誤觸 */
   #photo-modal-header {
     padding-bottom: 8px;
     margin-bottom: 8px;
-    align-items: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    row-gap: 6px;
   }
 
   #photo-modal-title-wrap {
     padding-right: 8px;
+    flex-basis: auto;
   }
 
   #photo-modal-title {
@@ -892,24 +946,34 @@ a.leaflet-popup-close-button {
     gap: 8px;
   }
 
+  /* 導覽/編輯鈕獨立佔滿第二行，靠左排列，遠離右上角的關閉鈕 */
   #photo-modal-nav {
-    gap: 4px;
+    order: 3;
+    flex-basis: 100%;
+    gap: 8px;
     margin-right: 0;
   }
 
-  /* 關閉按鈕改回正常排版流，避免與編輯／上一點下一點按鈕重疊 */
+  /* 關閉按鈕固定在標題列右上角 */
   #photo-modal-close {
+    order: 2;
     position: static;
     top: auto;
     right: auto;
-    margin-left: 6px;
+    margin-left: 0;
     flex-shrink: 0;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .wp-nav-btn {
     font-size: 0.9rem;
-    padding: 4px 7px;
+    padding: 6px 10px;
+    min-height: 36px;
   }
 
   .wp-nav-label {

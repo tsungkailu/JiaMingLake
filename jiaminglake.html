@@ -129,92 +129,114 @@
 <!-- Upload Photo Modal (上傳照片 Popup) -->
 <div id="upload-modal" role="dialog" aria-modal="true">
   <div id="upload-modal-box">
-    <button id="upload-modal-close" aria-label="關閉">✕</button>
-    <h3>➕ 新增地標照片</h3>
-    <div class="form-group">
-      <label for="upload-image">選擇照片</label>
-      <input type="file" id="upload-image" accept="image/*" />
+    <div class="form-modal-header">
+      <h3>➕ 新增地標照片</h3>
+      <button id="upload-modal-close" aria-label="關閉">✕</button>
     </div>
-    <div class="form-group">
-      <label for="upload-drive-url">或貼上 Google Drive 檔案分享連結（選填，二擇一）</label>
-      <input type="text" id="upload-drive-url" placeholder="https://drive.google.com/file/d/xxxx/view" />
+    <div class="form-modal-scrollable">
+      <div class="form-group">
+        <label for="upload-image">選擇照片</label>
+        <input type="file" id="upload-image" accept="image/*" />
+      </div>
+      <div class="form-group">
+        <label for="upload-drive-url">或貼上 Google Drive 檔案分享連結（選填，二擇一）</label>
+        <input type="text" id="upload-drive-url" placeholder="https://drive.google.com/file/d/xxxx/view" />
+      </div>
+      <div class="form-group">
+        <label for="upload-title">照片標題</label>
+        <input type="text" id="upload-title" placeholder="例如: 登頂紀念、登山口合照" />
+      </div>
+      <div class="form-group">
+        <label for="upload-body">說明文案</label>
+        <textarea id="upload-body" placeholder="請輸入對該照片的說明或文字紀錄..."></textarea>
+      </div>
     </div>
-    <div class="form-group">
-      <label for="upload-title">照片標題</label>
-      <input type="text" id="upload-title" placeholder="例如: 登頂紀念、登山口合照" />
+    <div class="form-modal-footer">
+      <button id="upload-submit" class="btn-submit">上傳並存檔</button>
+      <div id="upload-status" class="upload-status"></div>
     </div>
-    <div class="form-group">
-      <label for="upload-body">說明文案</label>
-      <textarea id="upload-body" placeholder="請輸入對該照片的說明或文字紀錄..."></textarea>
-    </div>
-    <button id="upload-submit" class="btn-submit">上傳並存檔</button>
-    <div id="upload-status" class="upload-status"></div>
   </div>
 </div>
 
 <!-- Edit Waypoint Modal (編輯地標 Popup) -->
 <div id="edit-modal" role="dialog" aria-modal="true">
   <div id="edit-modal-box">
-    <button id="edit-modal-close" aria-label="關閉">✕</button>
-    <h3>✏️ 編輯地標</h3>
-    <div class="form-group">
-      <label for="edit-name">地標名稱</label>
-      <input type="text" id="edit-name" />
+    <div class="form-modal-header">
+      <h3>✏️ 編輯地標</h3>
+      <button id="edit-modal-close" aria-label="關閉">✕</button>
     </div>
-    <div class="form-group">
-      <label for="edit-day">所屬天數</label>
-      <select id="edit-day">
-        <option value="D0">D0 交通日</option>
-        <option value="D1">D1 戒茂斯段</option>
-        <option value="D2">D2 向上深入</option>
-        <option value="D3">D3 嘉明湖日</option>
-        <option value="D4">D4 向陽下撤</option>
-      </select>
+    <div class="form-modal-scrollable">
+      <div class="form-group">
+        <label for="edit-name">地標名稱</label>
+        <input type="text" id="edit-name" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="edit-day">所屬天數</label>
+          <select id="edit-day">
+            <option value="D0">D0 交通日</option>
+            <option value="D1">D1 戒茂斯段</option>
+            <option value="D2">D2 向上深入</option>
+            <option value="D3">D3 嘉明湖日</option>
+            <option value="D4">D4 向陽下撤</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="edit-time">時間</label>
+          <input type="text" id="edit-time" placeholder="例如: 8:00" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="edit-km">里程 (km)</label>
+          <input type="text" id="edit-km" placeholder="例如: 10.2k" />
+        </div>
+        <div class="form-group">
+          <label for="edit-elevation">海拔</label>
+          <input type="text" id="edit-elevation" placeholder="例如: 2771m" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="edit-desc">故事內容</label>
+        <textarea id="edit-desc" class="tall"></textarea>
+      </div>
     </div>
-    <div class="form-group">
-      <label for="edit-time">時間</label>
-      <input type="text" id="edit-time" placeholder="例如: 8:00" />
+    <div class="form-modal-footer">
+      <button id="edit-submit" class="btn-submit">儲存修改</button>
+      <div id="edit-status" class="upload-status"></div>
     </div>
-    <div class="form-group">
-      <label for="edit-km">里程 (km)</label>
-      <input type="text" id="edit-km" placeholder="例如: 10.2k" />
-    </div>
-    <div class="form-group">
-      <label for="edit-elevation">海拔</label>
-      <input type="text" id="edit-elevation" placeholder="例如: 2771m" />
-    </div>
-    <div class="form-group">
-      <label for="edit-desc">故事內容</label>
-      <textarea id="edit-desc" class="tall"></textarea>
-    </div>
-    <button id="edit-submit" class="btn-submit">儲存修改</button>
-    <div id="edit-status" class="upload-status"></div>
   </div>
 </div>
 
 <!-- Edit Photo Modal (編輯照片 Popup) -->
 <div id="edit-photo-modal" role="dialog" aria-modal="true">
   <div id="edit-photo-modal-box">
-    <button id="edit-photo-modal-close" aria-label="關閉">✕</button>
-    <h3>✏️ 編輯照片</h3>
-    <div class="form-group">
-      <label for="edit-photo-image">更換照片（選填，留空則保留原圖）</label>
-      <input type="file" id="edit-photo-image" accept="image/*" />
+    <div class="form-modal-header">
+      <h3>✏️ 編輯照片</h3>
+      <button id="edit-photo-modal-close" aria-label="關閉">✕</button>
     </div>
-    <div class="form-group">
-      <label for="edit-photo-drive-url">或貼上 Google Drive 檔案分享連結（選填，二擇一）</label>
-      <input type="text" id="edit-photo-drive-url" placeholder="https://drive.google.com/file/d/xxxx/view" />
+    <div class="form-modal-scrollable">
+      <div class="form-group">
+        <label for="edit-photo-image">更換照片（選填，留空則保留原圖）</label>
+        <input type="file" id="edit-photo-image" accept="image/*" />
+      </div>
+      <div class="form-group">
+        <label for="edit-photo-drive-url">或貼上 Google Drive 檔案分享連結（選填，二擇一）</label>
+        <input type="text" id="edit-photo-drive-url" placeholder="https://drive.google.com/file/d/xxxx/view" />
+      </div>
+      <div class="form-group">
+        <label for="edit-photo-title">照片標題</label>
+        <input type="text" id="edit-photo-title" placeholder="例如: 登頂紀念、登山口合照" />
+      </div>
+      <div class="form-group">
+        <label for="edit-photo-body">說明文案</label>
+        <textarea id="edit-photo-body" placeholder="請輸入對該照片的說明或文字紀錄..."></textarea>
+      </div>
     </div>
-    <div class="form-group">
-      <label for="edit-photo-title">照片標題</label>
-      <input type="text" id="edit-photo-title" placeholder="例如: 登頂紀念、登山口合照" />
+    <div class="form-modal-footer">
+      <button id="edit-photo-submit" class="btn-submit">儲存修改</button>
+      <div id="edit-photo-status" class="upload-status"></div>
     </div>
-    <div class="form-group">
-      <label for="edit-photo-body">說明文案</label>
-      <textarea id="edit-photo-body" placeholder="請輸入對該照片的說明或文字紀錄..."></textarea>
-    </div>
-    <button id="edit-photo-submit" class="btn-submit">儲存修改</button>
-    <div id="edit-photo-status" class="upload-status"></div>
   </div>
 </div>
 

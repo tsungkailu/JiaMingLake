@@ -67,19 +67,106 @@ function resolveApiUrl(path){
   return CLOUD_API_BASE + path;
 }
 
-// 背景同步失敗時的提示（畫面上已經套用了本地變更，這裡只是告知「還沒真的存進雲端」）
-function showSyncErrorToast(message){
+// ---- GitHub raw content：commit 一成功內容就能直接讀到，不必等 GitHub Pages 重新 build/deploy ----
+var GITHUB_OWNER  = 'tsungkailu';
+var GITHUB_REPO   = 'JiaMingLake';
+var GITHUB_BRANCH = 'main';
+
+function githubRawUrl(path, bust){
+  var url = 'https://raw.githubusercontent.com/' + GITHUB_OWNER + '/' + GITHUB_REPO + '/' + GITHUB_BRANCH + '/' + path;
+  if (bust) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + bust;
+  return url;
+}
+
+// ---- 本機「已存到 GitHub、但 Pages 可能還沒重新部署」的待確認變更佇列 ----
+// GitHub Pages 從 commit 到網站真的重新部署完成常常要 30 秒以上；這段期間如果重新整理頁面，
+// 會讀到還沒更新的 waypoint-data.js，讓剛存好的修改看起來「消失」。
+// 這裡把每一筆已經成功 commit 的變更先存進 localStorage，boot() 時疊加在剛載入的資料上，
+// 直到偵測到 bundled 資料已經跟上了才會把該筆記錄丟掉，避免佇列無限累積。
+var LOCAL_PATCH_KEY = 'jiaminglake_pending_patches_v1';
+
+function loadLocalPatches(){
+  try { return JSON.parse(localStorage.getItem(LOCAL_PATCH_KEY) || '[]'); } catch(e){ return []; }
+}
+function saveLocalPatches(patches){
+  try { localStorage.setItem(LOCAL_PATCH_KEY, JSON.stringify(patches)); } catch(e){}
+}
+function addLocalPatch(patch){
+  var patches = loadLocalPatches();
+  patches.push(patch);
+  saveLocalPatches(patches);
+}
+
+function applyLocalPatches(){
+  var patches = loadLocalPatches();
+  if(!patches.length) return;
+  var stillPending = [];
+  patches.forEach(function(patch){
+    if(!applyOnePatch(patch)) stillPending.push(patch);
+  });
+  saveLocalPatches(stillPending);
+}
+
+// 回傳 true 代表「bundled 資料已經跟這筆變更一致了」，可以把這筆記錄丟掉
+function applyOnePatch(patch){
+  if(patch.type === 'add-photo'){
+    var list = WAYPOINT_PHOTOS[patch.order] || (WAYPOINT_PHOTOS[patch.order] = []);
+    var alreadyLive = list.some(function(p){ return p._realSrc && p._realSrc === patch.photo._realSrc; });
+    if(!alreadyLive) list.push(patch.photo);
+    return alreadyLive;
+  }
+  if(patch.type === 'edit-photo'){
+    var editList = WAYPOINT_PHOTOS[patch.order] || [];
+    var photo = editList.filter(function(p){ return p._realSrc === patch.photoSrc; })[0];
+    if(!photo) return true;
+    var alreadyLive = photo.title === patch.title && photo.body === patch.body && (!patch.src || photo.src === patch.src);
+    photo.title = patch.title;
+    photo.body  = patch.body;
+    if(patch.src) photo.src = patch.src;
+    return alreadyLive;
+  }
+  if(patch.type === 'delete-photo'){
+    var delList = WAYPOINT_PHOTOS[patch.order] || [];
+    var idx = -1;
+    for(var i=0;i<delList.length;i++){ if(delList[i]._realSrc === patch.photoSrc){ idx = i; break; } }
+    if(idx < 0) return true;
+    delList.splice(idx, 1);
+    return false;
+  }
+  if(patch.type === 'update-waypoint'){
+    var wp = null;
+    for(var j=0;j<WAYPOINTS.length;j++){ if(WAYPOINTS[j].order === patch.order){ wp = WAYPOINTS[j]; break; } }
+    if(!wp) return true;
+    var mapped = {
+      name: patch.fields.name,
+      day:  patch.fields.day,
+      time: patch.fields.time,
+      km:   patch.fields.km,
+      ele:  patch.fields.elevation,
+      desc: patch.fields.desc
+    };
+    var wpAlreadyLive = Object.keys(mapped).every(function(k){ return wp[k] === mapped[k]; });
+    Object.assign(wp, mapped);
+    return wpAlreadyLive;
+  }
+  return true;
+}
+
+// 背景同步結果的提示（成功／失敗都會給明確回饋，讓使用者知道是不是「真的」存好了）
+function showSyncToast(message, isError){
   var toast = document.createElement('div');
-  toast.className = 'sync-error-toast';
-  toast.textContent = '⚠️ ' + message;
+  toast.className = 'sync-error-toast' + (isError ? '' : ' success');
+  toast.textContent = (isError ? '⚠️ ' : '✅ ') + message;
   var closeBtn = document.createElement('button');
   closeBtn.textContent = '✕';
   closeBtn.setAttribute('aria-label', '關閉提示');
   closeBtn.addEventListener('click', function(){ toast.remove(); });
   toast.appendChild(closeBtn);
   document.body.appendChild(toast);
-  setTimeout(function(){ toast.remove(); }, 8000);
+  setTimeout(function(){ toast.remove(); }, isError ? 8000 : 4000);
 }
+function showSyncErrorToast(message){ showSyncToast(message, true); }
+function showSyncSuccessToast(message){ showSyncToast(message, false); }
 
 // =====================================================================
 // BOOT
@@ -126,6 +213,10 @@ function showSyncErrorToast(message){
       return { src: p.src || '', title: p.title || '', body: p.body || '', _realSrc: p.src || '' };
     });
   });
+
+  // 疊加「已經存到 GitHub、但 waypoint-data.js 這份 bundled 資料可能還沒跟上」的本機待確認變更，
+  // 讓剛存好的照片/地標修改重新整理後也看得到，不必等 GitHub Pages 重新部署完成。
+  applyLocalPatches();
 
   // Sort WAYPOINTS chronologically by day and order
   WAYPOINTS.sort(function(a, b){
@@ -862,6 +953,13 @@ function initPhotoModal(){
           .then(function(res){
             if(res.success){
               newPhoto._realSrc = res.src;
+              newPhoto.src = githubRawUrl(res.src, Date.now());
+              addLocalPatch({
+                type: 'add-photo',
+                order: waypointOrder,
+                photo: { src: newPhoto.src, title: newPhoto.title, body: newPhoto.body, _realSrc: newPhoto._realSrc }
+              });
+              showSyncSuccessToast('照片已確實存檔到 GitHub，重新整理也看得到');
             } else {
               showSyncErrorToast('照片同步到 GitHub 失敗（畫面上仍看得到，但重新整理後會消失）: ' + res.error);
             }
@@ -923,7 +1021,10 @@ function initPhotoModal(){
     })
     .then(function(res){ return res.json(); })
     .then(function(res){
-      if(!res.success){
+      if(res.success){
+        addLocalPatch({ type: 'delete-photo', order: waypointOrder, photoSrc: photoSrc });
+        showSyncSuccessToast('刪除已確實同步到 GitHub');
+      } else {
         showSyncErrorToast('刪除同步到 GitHub 失敗: ' + res.error);
       }
     })
@@ -986,7 +1087,14 @@ function initPhotoModal(){
       .then(function(res){ return res.json(); })
       .then(function(res){
         if(res.success){
-          statusEl.textContent = '🎉 更新成功！網頁即將重新整理...';
+          // 先把這次修改記錄下來，reload 後即使 GitHub Pages 還沒重新部署，
+          // boot() 也會疊加這筆記錄，讓修改不會「看起來消失」。
+          addLocalPatch({
+            type: 'update-waypoint',
+            order: currentWaypointOrder,
+            fields: { name: nameVal, day: dayVal, time: timeVal, km: kmVal, elevation: eleVal, desc: descVal }
+          });
+          statusEl.textContent = '🎉 更新成功！已確實存檔，網頁即將重新整理...';
           statusEl.className = 'upload-status success';
           setTimeout(function(){
             window.location.reload();
@@ -1049,7 +1157,20 @@ function initPhotoModal(){
         })
         .then(function(res){ return res.json(); })
         .then(function(res){
-          if(!res.success){
+          if(res.success){
+            // 檔案路徑跟原本一樣（沒有改檔名），加上時間戳避免瀏覽器快取到換圖前的舊內容
+            var newSrc = webpBase64 ? githubRawUrl(editingPhotoSrc, Date.now()) : photo.src;
+            photo.src = newSrc;
+            addLocalPatch({
+              type: 'edit-photo',
+              order: getActiveWaypointOrder(),
+              photoSrc: editingPhotoSrc,
+              title: titleVal,
+              body: bodyVal,
+              src: webpBase64 ? newSrc : null
+            });
+            showSyncSuccessToast('照片編輯已確實同步到 GitHub');
+          } else {
             showSyncErrorToast('照片編輯同步到 GitHub 失敗: ' + res.error);
           }
         })
