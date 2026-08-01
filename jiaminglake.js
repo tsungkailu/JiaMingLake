@@ -163,7 +163,11 @@ function showSyncToast(message, isError){
   closeBtn.addEventListener('click', function(){ toast.remove(); });
   toast.appendChild(closeBtn);
   document.body.appendChild(toast);
-  setTimeout(function(){ toast.remove(); }, isError ? 8000 : 4000);
+  // 失敗訊息代表真的沒存到，山區訊號不穩時很容易錯過一閃即逝的提示，
+  // 所以錯誤訊息留在畫面上直到使用者按關閉，成功訊息才自動消失。
+  if(!isError){
+    setTimeout(function(){ toast.remove(); }, 4000);
+  }
 }
 function showSyncErrorToast(message){ showSyncToast(message, true); }
 function showSyncSuccessToast(message){ showSyncToast(message, false); }
