@@ -28,7 +28,7 @@ var currentPhotos   = [];
 var currentPhotoIdx = 0;
 var currentWaypointName = '';
 var currentWaypointOrder = null;
-var editingPhotoSrc = null;
+var editingPhotoId = null;
 
 // 上傳／編輯／刪除彈窗都是對「目前照片彈窗裡正在看的那一張」操作
 function getActivePhotos(){ return currentPhotos; }
@@ -96,13 +96,13 @@ function applyLocalPatches(){
 function applyOnePatch(patch){
   if(patch.type === 'add-photo'){
     var list = WAYPOINT_PHOTOS[patch.order] || (WAYPOINT_PHOTOS[patch.order] = []);
-    var alreadyLive = list.some(function(p){ return p._realSrc && p._realSrc === patch.photo._realSrc; });
+    var alreadyLive = list.some(function(p){ return p.id && p.id === patch.photo.id; });
     if(!alreadyLive) list.push(patch.photo);
     return alreadyLive;
   }
   if(patch.type === 'edit-photo'){
     var editList = WAYPOINT_PHOTOS[patch.order] || [];
-    var photo = editList.filter(function(p){ return p._realSrc === patch.photoSrc; })[0];
+    var photo = editList.filter(function(p){ return p.id === patch.photoId; })[0];
     if(!photo) return true;
     var alreadyLive = photo.body === patch.body && (!patch.src || photo.src === patch.src);
     photo.body  = patch.body;
@@ -112,7 +112,7 @@ function applyOnePatch(patch){
   if(patch.type === 'delete-photo'){
     var delList = WAYPOINT_PHOTOS[patch.order] || [];
     var idx = -1;
-    for(var i=0;i<delList.length;i++){ if(delList[i]._realSrc === patch.photoSrc){ idx = i; break; } }
+    for(var i=0;i<delList.length;i++){ if(delList[i].id === patch.photoId){ idx = i; break; } }
     if(idx < 0) return true;
     delList.splice(idx, 1);
     return false;
@@ -196,9 +196,11 @@ function showSyncSuccessToast(message){ showSyncToast(message, false); }
       spurReturn:  wp.spurReturn  || false
     });
     WAYPOINT_PHOTOS[wp.order] = (wp.photos || []).map(function(p){
-      // _realSrc：這張照片在 repo 裡實際的檔案路徑，用來識別「編輯/刪除哪一張」。
-      // 剛上傳、還在背景同步中的照片，_realSrc 會是 null，代表還不能編輯/刪除。
-      return { src: p.src || '', title: p.title || '', body: p.body || '', _realSrc: p.src || '' };
+      // id：這張照片的唯一識別碼，用來辨識「編輯/刪除哪一張」——不能用路徑 (src)，
+      // 因為佔位圖等多張照片可能共用同一個檔案路徑，用路徑找會抓錯到別張照片。
+      // _realSrc：這張照片在 repo 裡實際的檔案路徑，剛上傳、還在背景同步中的照片，
+      // _realSrc 會是 null，代表還不能編輯/刪除 (伺服器還沒回傳這張照片的 id)。
+      return { src: p.src || '', title: p.title || '', body: p.body || '', id: p.id || null, _realSrc: p.src || '' };
     });
   });
 
@@ -599,11 +601,11 @@ function initPhotoModal(){
   function openEditPhotoModal(){
     var photo = getActivePhotos()[getActivePhotoIdx()];
     if(!photo) return;
-    if(!photo._realSrc){
+    if(!photo._realSrc || !photo.id){
       alert('這張照片還在同步到 GitHub 中，請稍等一下再編輯。');
       return;
     }
-    editingPhotoSrc = photo._realSrc;
+    editingPhotoId = photo.id;
     document.getElementById('edit-photo-image').value = '';
     document.getElementById('edit-photo-drive-url').value = '';
     document.getElementById('edit-photo-body').value  = photo.body  || '';
@@ -681,7 +683,8 @@ function initPhotoModal(){
           var waypointOrder = getActiveWaypointOrder();
 
           // ── Optimistic UI：不等雲端同步，先把照片加進本地資料立刻顯示 ──
-          var newPhoto = { src: webpBase64, title: '', body: bodyVal, _realSrc: null };
+          // id 要等伺服器回應才會有，同步完成前不能編輯/刪除這張照片
+          var newPhoto = { src: webpBase64, title: '', body: bodyVal, id: null, _realSrc: null };
           if (!WAYPOINT_PHOTOS[waypointOrder]) WAYPOINT_PHOTOS[waypointOrder] = [];
           WAYPOINT_PHOTOS[waypointOrder].push(newPhoto);
           refreshActivePhotoView(WAYPOINT_PHOTOS[waypointOrder].length - 1);
@@ -709,11 +712,12 @@ function initPhotoModal(){
           .then(function(res){
             if(res.success){
               newPhoto._realSrc = res.src;
+              newPhoto.id = res.id;
               newPhoto.src = githubRawUrl(res.src, Date.now());
               addLocalPatch({
                 type: 'add-photo',
                 order: waypointOrder,
-                photo: { src: newPhoto.src, title: newPhoto.title, body: newPhoto.body, _realSrc: newPhoto._realSrc }
+                photo: { src: newPhoto.src, title: newPhoto.title, body: newPhoto.body, id: newPhoto.id, _realSrc: newPhoto._realSrc }
               });
               showSyncSuccessToast('照片已確實存檔到 GitHub，重新整理也看得到');
             } else {
@@ -749,7 +753,7 @@ function initPhotoModal(){
     var photo = photos[idx];
     if (!photo) return;
 
-    if (!photo._realSrc) {
+    if (!photo._realSrc || !photo.id) {
       alert('這張照片還在同步到 GitHub 中，請稍等一下再刪除。');
       return;
     }
@@ -760,7 +764,7 @@ function initPhotoModal(){
     // ── Optimistic UI：不等雲端同步，先從畫面上移除 ──
     var waypointName  = getActiveWaypointName();
     var waypointOrder = getActiveWaypointOrder();
-    var photoSrc = photo._realSrc;
+    var photoId = photo.id;
     photos.splice(idx, 1);
     refreshActivePhotoView(idx);
 
@@ -772,13 +776,13 @@ function initPhotoModal(){
       body: JSON.stringify({
         waypointName: waypointName,
         waypointOrder: waypointOrder,
-        photoSrc: photoSrc
+        photoId: photoId
       })
     })
     .then(function(res){ return res.json(); })
     .then(function(res){
       if(res.success){
-        addLocalPatch({ type: 'delete-photo', order: waypointOrder, photoSrc: photoSrc });
+        addLocalPatch({ type: 'delete-photo', order: waypointOrder, photoId: photoId });
         showSyncSuccessToast('刪除已確實同步到 GitHub');
       } else {
         showSyncErrorToast('刪除同步到 GitHub 失敗: ' + res.error);
@@ -867,10 +871,14 @@ function initPhotoModal(){
       var bodyVal    = document.getElementById('edit-photo-body').value.trim();
       var file       = fileInput.files[0];
 
-      function sendPhotoUpdate(webpBase64){
+      function sendPhotoUpdate(webpBase64, ext){
         var photos = getActivePhotos();
-        var photo = photos.find(function(p){ return p._realSrc === editingPhotoSrc; });
+        var photo = photos.find(function(p){ return p.id === editingPhotoId; });
         if(!photo) return;
+
+        // 換圖的檔名跟原本一樣，要在覆蓋 photo.src 之前先記下原本的路徑，
+        // 才知道等一下要幫哪個檔案加時間戳避免瀏覽器快取到換圖前的舊內容
+        var originalSrc = photo._realSrc;
 
         // ── Optimistic UI：不等雲端同步，先套用修改立刻顯示 ──
         photo.body  = bodyVal;
@@ -888,10 +896,10 @@ function initPhotoModal(){
         var payload = {
           waypointName: getActiveWaypointName(),
           waypointOrder: getActiveWaypointOrder(),
-          photoSrc: editingPhotoSrc,
+          photoId: editingPhotoId,
           body: bodyVal
         };
-        if (webpBase64) payload.image = webpBase64;
+        if (webpBase64) { payload.image = webpBase64; payload.ext = ext; }
 
         fetch(updateUrl, {
           method: 'POST',
@@ -901,13 +909,15 @@ function initPhotoModal(){
         .then(function(res){ return res.json(); })
         .then(function(res){
           if(res.success){
-            // 檔案路徑跟原本一樣（沒有改檔名），加上時間戳避免瀏覽器快取到換圖前的舊內容
-            var newSrc = webpBase64 ? githubRawUrl(editingPhotoSrc, Date.now()) : photo.src;
+            // 換圖時實際存檔的路徑要以伺服器回傳的為準：如果這張照片原本是跟別人共用的
+            // 佔位圖，伺服器會另外開一個新檔案、不會是原本那個路徑。加上時間戳避免
+            // 瀏覽器快取到換圖前的舊內容。
+            var newSrc = webpBase64 ? githubRawUrl(res.src || originalSrc, Date.now()) : photo.src;
             photo.src = newSrc;
             addLocalPatch({
               type: 'edit-photo',
               order: getActiveWaypointOrder(),
-              photoSrc: editingPhotoSrc,
+              photoId: editingPhotoId,
               body: bodyVal,
               src: webpBase64 ? newSrc : null
             });
