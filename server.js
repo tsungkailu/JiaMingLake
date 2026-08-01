@@ -3,6 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const crypto = require('crypto');
 
 const PORT = 8000;
 const PUBLIC_DIR = __dirname;
@@ -206,11 +207,16 @@ const server = http.createServer((req, res) => {
           wp.photos = [];
         }
 
+        // 每張照片都要有一個跟路徑無關的唯一 id：佔位圖等多張照片可能共用同一個
+        // 檔案路徑，如果編輯/刪除是用路徑去找，會抓到路徑相同的第一張、改錯照片。
+        const photoId = crypto.randomUUID();
+
         // 新增照片項目
         wp.photos.push({
           src: `photos/${filename}`,
           title: title || '',
-          body: desc || ''
+          body: desc || '',
+          id: photoId
         });
 
         // 寫回 waypoint.json
@@ -223,7 +229,7 @@ const server = http.createServer((req, res) => {
         console.log('[Server] build.js 執行成功');
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, src: `photos/${filename}` }));
+        res.end(JSON.stringify({ success: true, src: `photos/${filename}`, id: photoId }));
       } catch (err) {
         console.error('[Server] 上傳錯誤:', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -240,11 +246,11 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const payload = JSON.parse(body);
-        const { waypointName, waypointOrder, photoSrc } = payload;
+        const { waypointName, waypointOrder, photoId } = payload;
 
-        if ((!waypointName && waypointOrder === undefined) || !photoSrc) {
+        if ((!waypointName && waypointOrder === undefined) || !photoId) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: '缺少地標資訊或照片路徑' }));
+          res.end(JSON.stringify({ success: false, error: '缺少地標資訊或照片 id' }));
           return;
         }
 
@@ -266,25 +272,31 @@ const server = http.createServer((req, res) => {
           return;
         }
 
+        let deletedSrc = null;
         if (wp.photos) {
-          const idx = wp.photos.findIndex(p => p.src === photoSrc);
+          const idx = wp.photos.findIndex(p => p.id === photoId);
           if (idx >= 0) {
+            deletedSrc = wp.photos[idx].src;
             wp.photos.splice(idx, 1);
           }
         }
 
         // 寫回 waypoint.json
         fs.writeFileSync(jsonPath, JSON.stringify(data, null, 2), 'utf-8');
-        console.log(`[Server] waypoint.json 已刪除項目: ${waypointName} -> ${photoSrc}`);
+        console.log(`[Server] waypoint.json 已刪除項目: ${waypointName} -> id=${photoId}`);
 
-        // 刪除實體檔案 (只允許刪除 photos/ 開頭的本機上傳檔案)
-        if (photoSrc.startsWith('photos/')) {
-          const baseFilename = path.basename(photoSrc);
-          const fullFilePath = path.join(PHOTOS_DIR, baseFilename);
-          
-          if (fs.existsSync(fullFilePath)) {
-            fs.unlinkSync(fullFilePath);
-            console.log(`[Server] 已刪除實體檔案: ${fullFilePath}`);
+        // 刪除實體檔案 (只允許刪除 photos/ 開頭的本機上傳檔案)。
+        // 檔案路徑可能被其他照片共用 (例如都還沒換掉的佔位圖)，只有確定沒有其他
+        // 照片還在用同一個路徑時，才真的刪檔案，避免誤刪還在用的圖。
+        if (deletedSrc && deletedSrc.startsWith('photos/')) {
+          const stillUsed = data.waypoints.some(w => (w.photos || []).some(p => p.src === deletedSrc));
+          if (!stillUsed) {
+            const baseFilename = path.basename(deletedSrc);
+            const fullFilePath = path.join(PHOTOS_DIR, baseFilename);
+            if (fs.existsSync(fullFilePath)) {
+              fs.unlinkSync(fullFilePath);
+              console.log(`[Server] 已刪除實體檔案: ${fullFilePath}`);
+            }
           }
         }
 
@@ -437,11 +449,11 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const payload = JSON.parse(body);
-        const { waypointName, waypointOrder, photoSrc, title, body: desc, image } = payload;
+        const { waypointName, waypointOrder, photoId, title, body: desc, image, ext } = payload;
 
-        if ((!waypointName && waypointOrder === undefined) || !photoSrc) {
+        if ((!waypointName && waypointOrder === undefined) || !photoId) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: '缺少地標資訊或照片路徑' }));
+          res.end(JSON.stringify({ success: false, error: '缺少地標資訊或照片 id' }));
           return;
         }
 
@@ -463,7 +475,7 @@ const server = http.createServer((req, res) => {
           return;
         }
 
-        const photo = wp.photos.find(p => p.src === photoSrc);
+        const photo = wp.photos.find(p => p.id === photoId);
         if (!photo) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: '找不到對應的照片' }));
@@ -473,23 +485,33 @@ const server = http.createServer((req, res) => {
         if (title !== undefined) photo.title = title;
         if (desc !== undefined) photo.body = desc;
 
-        // 若有提供新圖片，覆蓋原本的實體檔案 (檔名維持不變，只允許操作 photos/ 目錄內的檔案)
+        // 若有提供新圖片：這張照片目前的路徑如果跟其他照片共用 (例如還沒換掉的
+        // 佔位圖)，不能直接覆蓋原檔，否則會連帶把其他照片也換成這張新圖，
+        // 這種情況要另外開一個新檔案；只有這張照片自己在用時才直接覆蓋原檔。
+        let newImageSrc = null;
         if (image) {
-          if (!photoSrc.startsWith('photos/')) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, error: '不合法的照片路徑' }));
-            return;
-          }
           const base64Data = image.replace(/^data:[^;]*;base64,/, "");
-          const baseFilename = path.basename(photoSrc);
-          const fullFilePath = path.join(PHOTOS_DIR, baseFilename);
+          const sharedWithOthers = data.waypoints.some(w =>
+            (w.photos || []).some(p => p !== photo && p.src === photo.src)
+          );
+          if (sharedWithOthers) {
+            // 副檔名要跟著這次上傳的新圖走，不能沿用舊路徑的副檔名 (舊路徑如果是共用的
+            // 佔位圖，副檔名會是 .svg，跟真正存進去的照片格式對不上)
+            const safeExt = /^[a-z0-9]{1,5}$/.test(ext || '') ? ext : 'webp';
+            const cleanName = (waypointName || 'photo').replace(/[^一-龥a-zA-Z0-9_-]/g, '');
+            newImageSrc = `photos/${cleanName}_${Date.now()}.${safeExt}`;
+            photo.src = newImageSrc;
+          } else {
+            newImageSrc = photo.src;
+          }
+          const fullFilePath = path.join(PHOTOS_DIR, path.basename(newImageSrc));
           fs.writeFileSync(fullFilePath, base64Data, 'base64');
           console.log(`[Server] 已覆蓋照片檔案: ${fullFilePath}`);
         }
 
         // 寫回 waypoint.json
         fs.writeFileSync(jsonPath, JSON.stringify(data, null, 2), 'utf-8');
-        console.log(`[Server] waypoint.json 照片資料已更新: ${photoSrc}`);
+        console.log(`[Server] waypoint.json 照片資料已更新: id=${photoId}`);
 
         // 自動執行 node build.js 重新編譯
         console.log('[Server] 正在執行 node build.js...');
@@ -497,7 +519,7 @@ const server = http.createServer((req, res) => {
         console.log('[Server] build.js 執行成功');
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true }));
+        res.end(JSON.stringify({ success: true, src: newImageSrc || undefined }));
       } catch (err) {
         console.error('[Server] 更新照片錯誤:', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
