@@ -1,0 +1,12 @@
+name = "jiaminglake-api"
+main = "worker.js"
+compatibility_date = "2026-07-26"
+
+[vars]
+# 改成你自己的 GitHub 帳號、repo 名稱、分支名稱
+GITHUB_OWNER = "tsungkailu"
+GITHUB_REPO = "JiaMingLake"
+GITHUB_BRANCH = "main"
+
+# GITHUB_TOKEN 不要寫在這裡！
+# 請用「wrangler secret put GITHUB_TOKEN」另外設定，才不會被打包進程式碼或上傳到 GitHub。
