@@ -54,6 +54,11 @@ var WAYPOINT_DATA = {
           "src": "photos/台鐵台北-池上_1785595337770.webp",
           "title": "測試2",
           "body": "測試2"
+        },
+        {
+          "src": "photos/台鐵台北-池上_1785595358822.webp",
+          "title": "測試3",
+          "body": "測試3"
         }
       ],
       "spur": false,
