@@ -1,0 +1,13 @@
+<svg viewBox="0 0 560 560" xmlns="http://www.w3.org/2000/svg">
+  <rect width="560" height="560" fill="#e9e9e9"/>
+  <g transform="translate(150,90) rotate(-8)">
+    <rect x="0" y="60" width="200" height="160" rx="10" fill="#cfcfcf"/>
+  </g>
+  <g transform="translate(180,70)">
+    <rect x="0" y="0" width="200" height="160" rx="10" fill="#fbfbfb" stroke="#bdbdbd" stroke-width="4"/>
+    <rect x="20" y="20" width="160" height="120" rx="4" fill="#b0b0b0"/>
+    <path d="M20 120 L70 75 L110 105 L140 65 L180 120 Z" fill="#e9e9e9"/>
+  </g>
+  <text x="280" y="330" font-family="Arial, sans-serif" font-size="52" font-weight="bold" fill="#9a9a9a" text-anchor="middle">NO IMAGE</text>
+  <text x="280" y="395" font-family="Arial, sans-serif" font-size="52" font-weight="bold" fill="#9a9a9a" text-anchor="middle">AVAILABLE</text>
+</svg>

@@ -30,26 +30,11 @@ var currentWaypointName = '';
 var currentWaypointOrder = null;
 var editingPhotoSrc = null;
 
-// ---- Elevation popup's own (independent) photo section state ----
-var currentElevPhotos = [];
-var currentElevPhotoIdx = 0;
-var currentElevWaypointName = '';
-var currentElevWaypointOrder = null;
-
-// 上傳／編輯／刪除三個共用彈窗，依目前是被「照片彈窗」還是「高度剖面照片區」開啟而定
-var activePhotoSource = 'modal'; // 'modal' | 'elev'
-function getActivePhotos(){
-  return activePhotoSource === 'elev' ? currentElevPhotos : currentPhotos;
-}
-function getActivePhotoIdx(){
-  return activePhotoSource === 'elev' ? currentElevPhotoIdx : currentPhotoIdx;
-}
-function getActiveWaypointName(){
-  return activePhotoSource === 'elev' ? currentElevWaypointName : currentWaypointName;
-}
-function getActiveWaypointOrder(){
-  return activePhotoSource === 'elev' ? currentElevWaypointOrder : currentWaypointOrder;
-}
+// 上傳／編輯／刪除彈窗都是對「目前照片彈窗裡正在看的那一張」操作
+function getActivePhotos(){ return currentPhotos; }
+function getActivePhotoIdx(){ return currentPhotoIdx; }
+function getActiveWaypointName(){ return currentWaypointName; }
+function getActiveWaypointOrder(){ return currentWaypointOrder; }
 
 // ---- Day display order ----
 var DAY_ORDER = ['D0','D1','D2','D3','D4'];
@@ -119,8 +104,7 @@ function applyOnePatch(patch){
     var editList = WAYPOINT_PHOTOS[patch.order] || [];
     var photo = editList.filter(function(p){ return p._realSrc === patch.photoSrc; })[0];
     if(!photo) return true;
-    var alreadyLive = photo.title === patch.title && photo.body === patch.body && (!patch.src || photo.src === patch.src);
-    photo.title = patch.title;
+    var alreadyLive = photo.body === patch.body && (!patch.src || photo.src === patch.src);
     photo.body  = patch.body;
     if(patch.src) photo.src = patch.src;
     return alreadyLive;
@@ -137,13 +121,13 @@ function applyOnePatch(patch){
     var wp = null;
     for(var j=0;j<WAYPOINTS.length;j++){ if(WAYPOINTS[j].order === patch.order){ wp = WAYPOINTS[j]; break; } }
     if(!wp) return true;
+    // 不含 desc：故事文字已改由照片說明承載，地標編輯不再碰它
     var mapped = {
       name: patch.fields.name,
       day:  patch.fields.day,
       time: patch.fields.time,
       km:   patch.fields.km,
-      ele:  patch.fields.elevation,
-      desc: patch.fields.desc
+      ele:  patch.fields.elevation
     };
     var wpAlreadyLive = Object.keys(mapped).every(function(k){ return wp[k] === mapped[k]; });
     Object.assign(wp, mapped);
@@ -231,9 +215,6 @@ function showSyncSuccessToast(message){ showSyncToast(message, false); }
   // Boot
   initMap();
   initPhotoModal();
-  buildWaypointList();
-  initTabs();
-  initMobileDrawer();
 })();
 
 // =====================================================================
@@ -298,9 +279,7 @@ function initMap(){
     var m = L.marker([wp.lat, wp.lng], {icon: icon, draggable: true}).addTo(map);
     (function(wp, marker){
       marker.on('click', function(){
-        var onElevation = document.querySelector('[data-tab="elevation"]').classList.contains('active');
-        if(!onElevation){ openPhotoModal(wp); }
-        toggleChartMarker(wp);
+        openPhotoModal(wp);
       });
       
       marker.on('dragend', function(event){
@@ -379,15 +358,31 @@ function buildChart(){
           }
         }
       },
+      // 這張圖是彈窗裡的輔助資訊，軸標題拿掉、刻度縮到最小，把空間讓給曲線本身
+      layout: {padding: {top: 6, right: 2, bottom: 0, left: 0}},
       scales: {
         x: {
           type: 'linear', min: 0, max: TOTAL_KM,
-          ticks: {maxTicksLimit: 8, font: {size: 10}, callback: function(v){ return v.toFixed(0) + 'k'; }},
-          title: {display: true, text: '距離（km）', font: {size: 10}}
+          grid: {display: false},
+          border: {color: '#e2e8f0'},
+          ticks: {
+            maxTicksLimit: 6,
+            font: {size: 9},
+            color: '#9aa5ad',
+            padding: 2,
+            callback: function(v){ return v.toFixed(0) + 'k'; }
+          }
         },
         y: {
-          ticks: {font: {size: 10}, callback: function(v){ return v + 'm'; }},
-          title: {display: true, text: '海拔（m）', font: {size: 10}}
+          grid: {color: '#f1f5f4'},
+          border: {display: false},
+          ticks: {
+            maxTicksLimit: 4,
+            font: {size: 9},
+            color: '#9aa5ad',
+            padding: 4,
+            callback: function(v){ return v + 'm'; }
+          }
         }
       }
     }
@@ -437,212 +432,22 @@ function redrawOverlay(){
       svg.appendChild(circle);
     }
 
-    // Name label
-    var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    text.setAttribute('x', x);     text.setAttribute('y', ca.top - 6);
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('font-size', '9');
-    text.setAttribute('font-family', 'sans-serif');
-    text.setAttribute('font-weight', '700');
-    text.setAttribute('fill', color);
-    text.textContent = wp.name;
-    svg.appendChild(text);
+    // 地標名稱不再標在圖上：彈窗標題已經寫得很清楚了，圖上再寫一次只會變得雜亂
   });
 }
 
-function toggleChartMarker(wp){
-  buildChart();
-  var onElevation = document.querySelector('[data-tab="elevation"]').classList.contains('active');
-  if(onElevation){
-    var idx = activeMarkers.findIndex(function(m){ return m.wp.name === wp.name; });
-    if(idx >= 0){ activeMarkers.splice(idx, 1); }
-    else         { activeMarkers = [{wp: wp}]; }
-  } else {
-    var idx = activeMarkers.findIndex(function(m){ return m.wp.name === wp.name; });
-    if(idx >= 0){ activeMarkers.splice(idx, 1); }
-    else         { activeMarkers.push({wp: wp}); }
-  }
-  updateElevHint();
-  updateElevDetail();
-  requestAnimationFrame(redrawOverlay);
-}
-
-// 高度剖面彈窗的上一點／下一點導覽：直接切換成單一標記點 (取代原本的多選標記)
-function selectElevWaypoint(wp){
+// 在高度剖面圖上標出目前正在看的那一個地標 (彈窗一次只看一個點，所以只留一個標記)
+function showChartMarker(wp){
   buildChart();
   activeMarkers = [{wp: wp}];
-  updateElevHint();
-  updateElevDetail();
+  // 圖表要等彈窗顯示出來才量得到實際寬高，這裡補一次 resize 才不會畫成 0 寬
+  if(elevChart) elevChart.resize();
   requestAnimationFrame(redrawOverlay);
-}
-
-function updateElevHint(){
-  var hint = document.getElementById('chart-hint');
-  if(activeMarkers.length > 0){
-    hint.textContent = '📍 ' + activeMarkers.map(function(m){ return m.wp.name; }).join('、');
-    hint.style.color = '#333';
-  } else {
-    hint.textContent = '點擊地標可標記於此';
-    hint.style.color = 'var(--muted)';
-  }
-}
-
-function updateElevDetail(){
-  var detail = document.getElementById('elev-wp-detail');
-  var empty  = document.getElementById('elev-wp-empty');
-  if(activeMarkers.length > 0){
-    var sel   = activeMarkers[activeMarkers.length - 1].wp;
-    var color = dayColors[sel.day];
-    document.getElementById('elev-wp-dot').style.background = color;
-    document.getElementById('elev-wp-dot').textContent = sel.day;
-    document.getElementById('elev-wp-name').textContent =
-      (dayEmoji[sel.day] || '') + ' ' + sel.name;
-    document.getElementById('elev-wp-meta').innerHTML =
-      '<span>⛰ ' + sel.ele + '</span>' +
-      '<span>📏 ' + sel.km + '</span>' +
-      '<span>⏰ ' + sel.time + '</span>';
-    document.getElementById('elev-wp-desc').textContent = sel.desc;
-    detail.style.display = 'block';
-    empty.style.display  = 'none';
-
-    var currIdx = WAYPOINTS.findIndex(function(w){ return w.order === sel.order; });
-    var prevBtn = document.getElementById('elev-nav-prev');
-    var nextBtn = document.getElementById('elev-nav-next');
-    prevBtn.disabled = (currIdx <= 0);
-    nextBtn.disabled = (currIdx < 0 || currIdx >= WAYPOINTS.length - 1);
-
-    loadElevPhotoSection(sel);
-  } else {
-    detail.style.display = 'none';
-    empty.style.display  = 'flex';
-  }
-}
-
-// 高度剖面彈窗自己的照片區塊 (與照片彈窗各自獨立的瀏覽狀態)
-function showEmptyElevPhoto(){
-  document.getElementById('elev-photo-delete-btn').style.display = 'none';
-  document.getElementById('elev-photo-edit-btn').style.display   = 'none';
-  document.getElementById('elev-photo-img').src = '';
-  document.getElementById('elev-photo-img').alt = '暫無照片';
-  document.getElementById('elev-photo-dots').innerHTML = '';
-  document.getElementById('elev-photo-title').textContent = '尚未新增照片';
-  document.getElementById('elev-photo-body').textContent  = '請點擊左上角按鈕新增照片至此地標。';
-  document.getElementById('elev-photo-prev').style.display = 'none';
-  document.getElementById('elev-photo-next').style.display = 'none';
-}
-
-function loadElevPhotoSection(wp){
-  var photos = WAYPOINT_PHOTOS[wp.order] || [];
-  currentElevPhotos        = photos;
-  currentElevPhotoIdx      = 0;
-  currentElevWaypointName  = wp.name;
-  currentElevWaypointOrder = wp.order;
-
-  if(photos.length === 0){
-    showEmptyElevPhoto();
-  } else {
-    renderElevPhoto();
-    document.getElementById('elev-photo-prev').style.display = photos.length > 1 ? 'flex' : 'none';
-    document.getElementById('elev-photo-next').style.display = photos.length > 1 ? 'flex' : 'none';
-  }
-}
-
-function renderElevPhoto(){
-  var p = currentElevPhotos[currentElevPhotoIdx];
-  document.getElementById('elev-photo-delete-btn').style.display = 'flex';
-  document.getElementById('elev-photo-edit-btn').style.display   = 'flex';
-  document.getElementById('elev-photo-img').src = p.src;
-  document.getElementById('elev-photo-img').alt = p.title || '';
-  document.getElementById('elev-photo-title').textContent = p.title || '';
-  document.getElementById('elev-photo-body').textContent  = p.body  || '';
-
-  var dotsEl = document.getElementById('elev-photo-dots');
-  dotsEl.innerHTML = '';
-  currentElevPhotos.forEach(function(_, idx){
-    var dot = document.createElement('div');
-    dot.className = 'photo-dot' + (idx === currentElevPhotoIdx ? ' active' : '');
-    dot.addEventListener('click', function(){ currentElevPhotoIdx = idx; renderElevPhoto(); });
-    dotsEl.appendChild(dot);
-  });
 }
 
 window.addEventListener('resize', function(){
   requestAnimationFrame(redrawOverlay);
 });
-
-// =====================================================================
-// WAYPOINT SIDEBAR LIST
-// =====================================================================
-function buildWaypointList(){
-  var wpList = document.getElementById('wp-list');
-
-  DAY_ORDER.forEach(function(day){
-    var dayWps = WAYPOINTS
-      .filter(function(wp){ return wp.day === day; })
-      .sort(function(a, b){ return (a.order || 0) - (b.order || 0); });
-
-    if(!dayWps.length) return;
-
-    var group = document.createElement('div');
-    group.className = 'day-group';
-
-    var label = document.createElement('div');
-    label.className = 'day-label';
-    label.style.background = dayColors[day];
-    label.textContent = dayNames[day] || day;
-    group.appendChild(label);
-
-    dayWps.forEach(function(wp, i){
-      var card = document.createElement('div');
-      card.className = 'wp-card';
-
-      // 支線點加上視覺標示
-      var spurBadge = wp.spur
-        ? "<span style='font-size:.6rem;background:#e67e22;color:#fff;border-radius:3px;padding:1px 4px;margin-left:4px'>支線</span>"
-        : '';
-
-      var dot = document.createElement('div');
-      dot.className = 'wp-dot';
-      dot.style.background = dayColors[day];
-      dot.textContent = wp.order || (i + 1);
-
-      var info = document.createElement('div');
-      info.className = 'wp-info';
-      info.innerHTML =
-        "<div class='wp-name'>" + wp.name + spurBadge + '</div>' +
-        "<div class='wp-meta'>" +
-          '<span>⛰ ' + wp.ele  + '</span>' +
-          '<span>📏 ' + wp.km   + '</span>' +
-          '<span>⏰ ' + wp.time + '</span>' +
-        '</div>' +
-        "<div class='wp-desc'>" + wp.desc + '</div>';
-
-      card.appendChild(dot);
-      card.appendChild(info);
-
-      card.addEventListener('click', (function(wp, card){
-        return function(){
-          if(activeCard) activeCard.classList.remove('active');
-          card.classList.add('active');
-          activeCard = card;
-          if (wp.lat !== null && wp.lng !== null && wp.lat !== undefined && wp.lng !== undefined) {
-            map.setView([wp.lat, wp.lng], 15, {animate: true});
-          }
-          var onElevation = document.querySelector('[data-tab="elevation"]').classList.contains('active');
-          if(!onElevation){ openPhotoModal(wp); }
-          toggleChartMarker(wp);
-          if(window.innerWidth < 768 && !onElevation){
-            setMobileDrawerState('closed');
-          }
-        };
-      })(wp, card));
-
-      group.appendChild(card);
-    });
-
-    wpList.appendChild(group);
-  });
-}
 
 // =====================================================================
 // PHOTO MODAL
@@ -727,7 +532,6 @@ function fetchDriveImageAsDataUrl(driveUrl, onSuccess, onError){
 function resetUploadForm(){
   document.getElementById('upload-image').value = '';
   document.getElementById('upload-drive-url').value = '';
-  document.getElementById('upload-title').value = '';
   document.getElementById('upload-body').value = '';
   document.getElementById('upload-status').textContent = '';
   document.getElementById('upload-status').className = 'upload-status';
@@ -749,15 +553,6 @@ function initPhotoModal(){
   var btnOpenUpload = document.getElementById('btn-open-upload-modal');
   if (btnOpenUpload) {
     btnOpenUpload.addEventListener('click', function(){
-      activePhotoSource = 'modal';
-      resetUploadForm();
-      uploadModal.classList.add('open');
-    });
-  }
-  var elevPhotoAddBtn = document.getElementById('elev-photo-add-btn');
-  if (elevPhotoAddBtn) {
-    elevPhotoAddBtn.addEventListener('click', function(){
-      activePhotoSource = 'elev';
       resetUploadForm();
       uploadModal.classList.add('open');
     });
@@ -784,7 +579,6 @@ function initPhotoModal(){
       document.getElementById('edit-time').value      = wp.time;
       document.getElementById('edit-km').value        = wp.km;
       document.getElementById('edit-elevation').value = wp.ele;
-      document.getElementById('edit-desc').value      = wp.desc;
       document.getElementById('edit-status').textContent = '';
       document.getElementById('edit-status').className  = 'upload-status';
       editModal.classList.add('open');
@@ -802,8 +596,7 @@ function initPhotoModal(){
 
   // 編輯照片彈窗控制
   var editPhotoModal = document.getElementById('edit-photo-modal');
-  function openEditPhotoModal(source){
-    activePhotoSource = source;
+  function openEditPhotoModal(){
     var photo = getActivePhotos()[getActivePhotoIdx()];
     if(!photo) return;
     if(!photo._realSrc){
@@ -813,7 +606,6 @@ function initPhotoModal(){
     editingPhotoSrc = photo._realSrc;
     document.getElementById('edit-photo-image').value = '';
     document.getElementById('edit-photo-drive-url').value = '';
-    document.getElementById('edit-photo-title').value = photo.title || '';
     document.getElementById('edit-photo-body').value  = photo.body  || '';
     document.getElementById('edit-photo-status').textContent = '';
     document.getElementById('edit-photo-status').className  = 'upload-status';
@@ -821,11 +613,7 @@ function initPhotoModal(){
   }
   var btnOpenEditPhoto = document.getElementById('photo-modal-edit-btn');
   if (btnOpenEditPhoto) {
-    btnOpenEditPhoto.addEventListener('click', function(){ openEditPhotoModal('modal'); });
-  }
-  var elevPhotoEditBtn = document.getElementById('elev-photo-edit-btn');
-  if (elevPhotoEditBtn) {
-    elevPhotoEditBtn.addEventListener('click', function(){ openEditPhotoModal('elev'); });
+    btnOpenEditPhoto.addEventListener('click', function(){ openEditPhotoModal(); });
   }
   var btnCloseEditPhoto = document.getElementById('edit-photo-modal-close');
   if (btnCloseEditPhoto) {
@@ -851,24 +639,6 @@ function initPhotoModal(){
     }
   });
 
-  // 高度剖面彈窗的上一點 / 下一點地標導覽 (與照片彈窗各自獨立)
-  document.getElementById('elev-nav-prev').addEventListener('click', function(){
-    var sel = activeMarkers.length > 0 ? activeMarkers[activeMarkers.length - 1].wp : null;
-    if(!sel) return;
-    var currIdx = WAYPOINTS.findIndex(function(w){ return w.order === sel.order; });
-    if(currIdx > 0){
-      selectElevWaypoint(WAYPOINTS[currIdx - 1]);
-    }
-  });
-  document.getElementById('elev-nav-next').addEventListener('click', function(){
-    var sel = activeMarkers.length > 0 ? activeMarkers[activeMarkers.length - 1].wp : null;
-    if(!sel) return;
-    var currIdx = WAYPOINTS.findIndex(function(w){ return w.order === sel.order; });
-    if(currIdx >= 0 && currIdx < WAYPOINTS.length - 1){
-      selectElevWaypoint(WAYPOINTS[currIdx + 1]);
-    }
-  });
-
   // 照片切換
   document.getElementById('photo-prev').addEventListener('click', function(){
     if(currentPhotos.length < 2) return;
@@ -879,16 +649,6 @@ function initPhotoModal(){
     if(currentPhotos.length < 2) return;
     currentPhotoIdx = (currentPhotoIdx + 1) % currentPhotos.length;
     renderPhoto();
-  });
-  document.getElementById('elev-photo-prev').addEventListener('click', function(){
-    if(currentElevPhotos.length < 2) return;
-    currentElevPhotoIdx = (currentElevPhotoIdx - 1 + currentElevPhotos.length) % currentElevPhotos.length;
-    renderElevPhoto();
-  });
-  document.getElementById('elev-photo-next').addEventListener('click', function(){
-    if(currentElevPhotos.length < 2) return;
-    currentElevPhotoIdx = (currentElevPhotoIdx + 1) % currentElevPhotos.length;
-    renderElevPhoto();
   });
   document.addEventListener('keydown', function(e){
     if(uploadModal.classList.contains('open')) {
@@ -935,13 +695,12 @@ function initPhotoModal(){
         statusEl.className = 'upload-status';
 
         compressDataUrlToWebp(dataUrl, function(webpBase64, ext){
-          var titleVal = document.getElementById('upload-title').value.trim();
           var bodyVal  = document.getElementById('upload-body').value.trim();
           var waypointName  = getActiveWaypointName();
           var waypointOrder = getActiveWaypointOrder();
 
           // ── Optimistic UI：不等雲端同步，先把照片加進本地資料立刻顯示 ──
-          var newPhoto = { src: webpBase64, title: titleVal, body: bodyVal, _realSrc: null };
+          var newPhoto = { src: webpBase64, title: '', body: bodyVal, _realSrc: null };
           if (!WAYPOINT_PHOTOS[waypointOrder]) WAYPOINT_PHOTOS[waypointOrder] = [];
           WAYPOINT_PHOTOS[waypointOrder].push(newPhoto);
           refreshActivePhotoView(WAYPOINT_PHOTOS[waypointOrder].length - 1);
@@ -960,7 +719,6 @@ function initPhotoModal(){
             body: JSON.stringify({
               waypointName: waypointName,
               waypointOrder: waypointOrder,
-              title: titleVal,
               body: bodyVal,
               image: webpBase64,
               ext: ext
@@ -1053,14 +811,6 @@ function initPhotoModal(){
   var btnDelete = document.getElementById('photo-modal-delete-btn');
   if (btnDelete) {
     btnDelete.addEventListener('click', function(){
-      activePhotoSource = 'modal';
-      deleteActivePhoto();
-    });
-  }
-  var elevPhotoDeleteBtn = document.getElementById('elev-photo-delete-btn');
-  if (elevPhotoDeleteBtn) {
-    elevPhotoDeleteBtn.addEventListener('click', function(){
-      activePhotoSource = 'elev';
       deleteActivePhoto();
     });
   }
@@ -1075,7 +825,6 @@ function initPhotoModal(){
       var timeVal = document.getElementById('edit-time').value.trim();
       var kmVal   = document.getElementById('edit-km').value.trim();
       var eleVal  = document.getElementById('edit-elevation').value.trim();
-      var descVal = document.getElementById('edit-desc').value.trim();
 
       if(!nameVal || !timeVal || !kmVal || !eleVal){
         statusEl.textContent = '❌ 請完整填寫所有欄位';
@@ -1097,8 +846,7 @@ function initPhotoModal(){
           day: dayVal,
           time: timeVal,
           km: kmVal,
-          elevation: eleVal,
-          desc: descVal
+          elevation: eleVal
         })
       })
       .then(function(res){ return res.json(); })
@@ -1109,7 +857,7 @@ function initPhotoModal(){
           addLocalPatch({
             type: 'update-waypoint',
             order: currentWaypointOrder,
-            fields: { name: nameVal, day: dayVal, time: timeVal, km: kmVal, elevation: eleVal, desc: descVal }
+            fields: { name: nameVal, day: dayVal, time: timeVal, km: kmVal, elevation: eleVal }
           });
           statusEl.textContent = '🎉 更新成功！已確實存檔，網頁即將重新整理...';
           statusEl.className = 'upload-status success';
@@ -1135,7 +883,6 @@ function initPhotoModal(){
       var statusEl   = document.getElementById('edit-photo-status');
       var fileInput  = document.getElementById('edit-photo-image');
       var driveUrl   = document.getElementById('edit-photo-drive-url').value.trim();
-      var titleVal   = document.getElementById('edit-photo-title').value.trim();
       var bodyVal    = document.getElementById('edit-photo-body').value.trim();
       var file       = fileInput.files[0];
 
@@ -1145,7 +892,6 @@ function initPhotoModal(){
         if(!photo) return;
 
         // ── Optimistic UI：不等雲端同步，先套用修改立刻顯示 ──
-        photo.title = titleVal;
         photo.body  = bodyVal;
         if (webpBase64) photo.src = webpBase64;
         refreshActivePhotoView(photos.indexOf(photo));
@@ -1162,7 +908,6 @@ function initPhotoModal(){
           waypointName: getActiveWaypointName(),
           waypointOrder: getActiveWaypointOrder(),
           photoSrc: editingPhotoSrc,
-          title: titleVal,
           body: bodyVal
         };
         if (webpBase64) payload.image = webpBase64;
@@ -1182,7 +927,6 @@ function initPhotoModal(){
               type: 'edit-photo',
               order: getActiveWaypointOrder(),
               photoSrc: editingPhotoSrc,
-              title: titleVal,
               body: bodyVal,
               src: webpBase64 ? newSrc : null
             });
@@ -1239,10 +983,26 @@ function openPhotoModal(wp){
   if (scrollEl) scrollEl.scrollTop = 0;
 
   var photoModal = document.getElementById('photo-modal');
-  
-  // 大標題與副標題分開
-  document.getElementById('photo-modal-title').textContent = wp.day + '-' + wp.order + ' ' + wp.name;
-  document.getElementById('photo-modal-meta').textContent = '📏 ' + wp.km + '　⏰ ' + wp.time + '　⛰ ' + wp.ele;
+
+  // 標題：天數色票 + 地標名稱
+  var titleEl = document.getElementById('photo-modal-title');
+  titleEl.innerHTML = '';
+  var badge = document.createElement('span');
+  badge.className = 'wp-day-badge';
+  badge.style.background = dayColors[wp.day] || 'var(--muted)';
+  badge.textContent = wp.day;
+  var nameEl = document.createElement('span');
+  nameEl.textContent = wp.name;
+  titleEl.appendChild(badge);
+  titleEl.appendChild(nameEl);
+
+  // 距離／時間／海拔：與下方的高度剖面圖同屬一塊資訊面板
+  var metaEl = document.getElementById('photo-modal-meta');
+  metaEl.innerHTML = '';
+  appendStat(metaEl, '距離', wp.km);
+  appendStat(metaEl, '時間', wp.time);
+  appendStat(metaEl, '海拔', wp.ele);
+
   document.getElementById('photo-modal-desc').textContent = wp.desc || '';
 
   // 上一點 / 下一點導覽按鈕啟用狀態
@@ -1260,6 +1020,24 @@ function openPhotoModal(wp){
     document.getElementById('photo-next').style.display = photos.length > 1 ? 'flex' : 'none';
   }
   photoModal.classList.add('open');
+
+  // 高度剖面圖要等彈窗真的顯示出來 (量得到寬高) 才建得起來，所以放在下一個影格
+  requestAnimationFrame(function(){ showChartMarker(wp); });
+}
+
+// 資訊面板裡的一組「標籤 + 數值」
+function appendStat(container, label, value){
+  var stat = document.createElement('div');
+  stat.className = 'wp-stat';
+  var labelEl = document.createElement('span');
+  labelEl.className = 'wp-stat-label';
+  labelEl.textContent = label;
+  var valueEl = document.createElement('span');
+  valueEl.className = 'wp-stat-value';
+  valueEl.textContent = value || '—';
+  stat.appendChild(labelEl);
+  stat.appendChild(valueEl);
+  container.appendChild(stat);
 }
 
 function showEmptyPhotoModal(){
@@ -1268,30 +1046,20 @@ function showEmptyPhotoModal(){
   document.getElementById('photo-modal-img').src        = '';
   document.getElementById('photo-modal-img').alt        = '暫無照片';
   document.getElementById('photo-modal-dots').innerHTML  = '';
-  document.getElementById('photo-modal-photo-title').textContent = '尚未新增照片';
   document.getElementById('photo-modal-photo-body').textContent  = '請點擊下方按鈕新增照片至此地標。';
   document.getElementById('photo-prev').style.display = 'none';
   document.getElementById('photo-next').style.display = 'none';
 }
 
 // Optimistic UI：新增/編輯/刪除照片後，立刻用目前 WAYPOINT_PHOTOS 的內容重繪
-// 當前開啟中的照片檢視區塊 (照片彈窗或高度剖面照片區)，不必等雲端同步、不必整頁重新整理
+// 照片彈窗，不必等雲端同步、不必整頁重新整理
 function refreshActivePhotoView(targetIdx){
-  if (activePhotoSource === 'elev') {
-    currentElevPhotos = WAYPOINT_PHOTOS[currentElevWaypointOrder] || [];
-    if (currentElevPhotos.length === 0) { showEmptyElevPhoto(); return; }
-    currentElevPhotoIdx = Math.max(0, Math.min(targetIdx, currentElevPhotos.length - 1));
-    document.getElementById('elev-photo-prev').style.display = currentElevPhotos.length > 1 ? 'flex' : 'none';
-    document.getElementById('elev-photo-next').style.display = currentElevPhotos.length > 1 ? 'flex' : 'none';
-    renderElevPhoto();
-  } else {
-    currentPhotos = WAYPOINT_PHOTOS[currentWaypointOrder] || [];
-    if (currentPhotos.length === 0) { showEmptyPhotoModal(); return; }
-    currentPhotoIdx = Math.max(0, Math.min(targetIdx, currentPhotos.length - 1));
-    document.getElementById('photo-prev').style.display = currentPhotos.length > 1 ? 'flex' : 'none';
-    document.getElementById('photo-next').style.display = currentPhotos.length > 1 ? 'flex' : 'none';
-    renderPhoto();
-  }
+  currentPhotos = WAYPOINT_PHOTOS[currentWaypointOrder] || [];
+  if (currentPhotos.length === 0) { showEmptyPhotoModal(); return; }
+  currentPhotoIdx = Math.max(0, Math.min(targetIdx, currentPhotos.length - 1));
+  document.getElementById('photo-prev').style.display = currentPhotos.length > 1 ? 'flex' : 'none';
+  document.getElementById('photo-next').style.display = currentPhotos.length > 1 ? 'flex' : 'none';
+  renderPhoto();
 }
 
 function renderPhoto(){
@@ -1300,7 +1068,6 @@ function renderPhoto(){
   document.getElementById('photo-modal-edit-btn').style.display   = 'flex';
   document.getElementById('photo-modal-img').src   = p.src;
   document.getElementById('photo-modal-img').alt   = p.title || '';
-  document.getElementById('photo-modal-photo-title').textContent = p.title || '';
   document.getElementById('photo-modal-photo-body').textContent  = p.body  || '';
 
   var dotsEl = document.getElementById('photo-modal-dots');
@@ -1310,54 +1077,6 @@ function renderPhoto(){
     dot.className = 'photo-dot' + (idx === currentPhotoIdx ? ' active' : '');
     dot.addEventListener('click', function(){ currentPhotoIdx = idx; renderPhoto(); });
     dotsEl.appendChild(dot);
-  });
-}
-
-// =====================================================================
-// TABS
-// =====================================================================
-function initTabs(){
-  document.querySelectorAll('.tab-btn').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
-      document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); });
-      btn.classList.add('active');
-      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-      if(btn.dataset.tab === 'elevation'){
-        buildChart();
-        requestAnimationFrame(redrawOverlay);
-      }
-    });
-  });
-}
-
-// =====================================================================
-// MOBILE DRAWER
-// 右下角按鈕直接在「關閉 → 行程亮點全螢幕彈窗 → 高度剖面全螢幕彈窗 → 關閉」間切換
-// =====================================================================
-function setMobileDrawerState(state){
-  var drawer = document.getElementById('side-panel');
-  var toggle = document.getElementById('drawer-toggle');
-  if(state === 'closed'){
-    drawer.classList.remove('open');
-    toggle.textContent = '📋';
-    return;
-  }
-  drawer.classList.add('open');
-  document.querySelector('.tab-btn[data-tab="' + state + '"]').click();
-  toggle.textContent = (state === 'waypoints') ? '📈' : '✕';
-}
-
-function initMobileDrawer(){
-  var toggle = document.getElementById('drawer-toggle');
-  var drawer = document.getElementById('side-panel');
-  toggle.addEventListener('click', function(){
-    if(!drawer.classList.contains('open')){
-      setMobileDrawerState('waypoints');
-      return;
-    }
-    var onElevation = document.querySelector('.tab-btn[data-tab="elevation"]').classList.contains('active');
-    setMobileDrawerState(onElevation ? 'closed' : 'elevation');
   });
 }
 

@@ -24,6 +24,13 @@ body {
   color: var(--text)
 }
 
+/* 地圖佔滿標題列以外的整個畫面：用 flex 撐開，才不會因為標題列高度變動而多出捲軸 */
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .site-header {
   background: linear-gradient(135deg, var(--forest) 0%, var(--peak) 60%, var(--trail) 100%);
   color: #fff;
@@ -76,105 +83,24 @@ body {
 
 .app {
   display: flex;
-  flex-direction: column;
-  height: calc(100vh - 56px)
-}
-
-@media(min-width:768px) {
-  .app {
-    flex-direction: row;
-    height: calc(100vh - 60px)
-  }
+  flex: 1;
+  min-height: 0;
 }
 
 #map {
   flex: 1;
-  min-height: 300px
+  min-height: 0;
 }
 
-.side {
-  width: 100%;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  box-shadow: -2px 0 12px rgba(0, 0, 0, .1);
-  overflow: hidden;
-}
-
-@media(min-width:768px) {
-  .side {
-    width: 340px;
-    min-width: 280px;
-    max-width: 380px
-  }
-}
-
-.tabs {
-  display: flex;
-  border-bottom: 2px solid #eee;
-  background: #fafafa
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 10px 4px;
-  font-size: .78rem;
-  font-weight: 600;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--muted);
-}
-
-.tab-btn.active {
-  color: var(--peak);
-  border-bottom: 3px solid var(--trail);
-  margin-bottom: -2px
-}
-
-.tab-pane {
-  display: none;
-  flex: 1;
-  overflow-y: auto;
-  flex-direction: column
-}
-
-.tab-pane.active {
-  display: flex
-}
-
-.chart-wrap {
-  padding: 14px 14px 4px;
-  flex-shrink: 0;
-  position: relative
-}
-
-.chart-wrap h4 {
-  font-size: .8rem;
-  color: var(--muted);
-  margin-bottom: 6px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px
-}
-
-.chart-hint {
-  font-size: .7rem;
-  color: var(--muted);
-  font-weight: 400
-}
-
+/* 高度剖面圖：整合在照片彈窗的標題區塊內，做成一條扁平的比例尺 */
 .chart-container {
   position: relative;
-  height: 150px
+  height: 96px
 }
 
 #elev-chart {
   width: 100% !important;
-  height: 150px !important
+  height: 96px !important
 }
 
 /* overlay for markers */
@@ -186,82 +112,6 @@ body {
   height: 100%;
   pointer-events: none;
   overflow: visible
-}
-
-.wp-list {
-  padding: 0 10px 10px
-}
-
-.day-group {
-  margin-top: 12px
-}
-
-.day-label {
-  font-size: .7rem;
-  font-weight: 700;
-  letter-spacing: .08em;
-  color: #fff;
-  padding: 3px 10px;
-  border-radius: 20px;
-  display: inline-block;
-  margin-bottom: 6px;
-}
-
-.wp-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background .15s;
-  border: 1px solid transparent;
-  margin-bottom: 4px;
-}
-
-.wp-card:hover,
-.wp-card.active {
-  background: var(--cream);
-  border-color: #ddd
-}
-
-.wp-dot {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: .62rem;
-  font-weight: 700;
-  color: #fff;
-}
-
-.wp-info {
-  flex: 1;
-  min-width: 0
-}
-
-.wp-name {
-  font-size: .82rem;
-  font-weight: 700;
-  line-height: 1.3
-}
-
-.wp-meta {
-  font-size: .7rem;
-  color: var(--muted);
-  margin-top: 2px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap
-}
-
-.wp-desc {
-  font-size: .72rem;
-  color: #555;
-  margin-top: 3px
 }
 
 .lf-popup-title {
@@ -307,9 +157,9 @@ body {
   border-radius: 16px;
   width: 620px;
   max-width: 92vw;
-  height: 700px;
-  max-height: 80vh;
-  padding: 24px;
+  height: 760px;
+  max-height: 88vh;
+  padding: 22px 24px 24px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
   position: relative;
   font-family: inherit;
@@ -322,59 +172,132 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  border-bottom: 1px solid #f0f0f0;
-  padding-bottom: 12px;
-  margin-bottom: 14px;
+  padding-bottom: 14px;
   flex-shrink: 0;
 }
 
 #photo-modal-title-wrap {
   flex: 1;
   min-width: 0;
-  padding-right: 48px;
+  padding-right: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 編輯地標：緊貼在標題旁邊，與上一點／下一點分開 */
+.title-edit-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 6px;
+  border-radius: 8px;
+  opacity: 0.5;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.title-edit-btn:hover {
+  opacity: 1;
+  background: #f1f5f2;
 }
 
 #photo-modal-title {
-  font-size: 1.25rem;
+  font-size: 1.08rem;
   font-weight: 700;
   color: var(--forest);
-  margin: 0 0 4px 0;
-  line-height: 1.3;
-}
-
-#photo-modal-meta {
-  font-size: 0.78rem;
-  color: var(--muted);
-  font-weight: 500;
+  margin: 0;
+  line-height: 1.45;
+  letter-spacing: 0.03em;
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-#photo-modal-nav {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-right: 28px;
-}
-
-.elev-wp-nav {
-  display: flex;
-  gap: 6px;
-  align-items: center;
+/* 天數色票，讓標題一眼看得出屬於哪一天 */
+.wp-day-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #fff;
+  padding: 3px 9px;
+  border-radius: 20px;
   flex-shrink: 0;
 }
 
-.wp-nav-btn {
-  background: #f5f5f5;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 0.72rem;
+/* 距離／時間／海拔 + 高度剖面：整合成標題下方的同一塊資訊面板 */
+#wp-profile-panel {
+  flex-shrink: 0;
+  background: #fbfcfb;
+  border: 1px solid #eceff0;
+  border-radius: 12px;
+  padding: 15px 18px 8px;
+  margin-bottom: 18px;
+}
+
+/* 距離／時間／海拔分散對齊，撐滿整塊面板的寬度 */
+.wp-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.wp-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 最後一組貼齊右緣，標籤與數值一起靠右 */
+.wp-stat:last-child {
+  align-items: flex-end;
+}
+
+.wp-stat-label {
+  font-size: 0.6rem;
   font-weight: 600;
-  color: #555;
+  letter-spacing: 0.16em;
+  color: #9aa5ad;
+}
+
+.wp-stat-value {
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #23303a;
+}
+
+/* 上一點／下一點：獨立一列、左右各佔一半，做成好點的大按鈕 */
+#photo-modal-nav {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.wp-nav-btn {
+  flex: 1;
+  background: #f5f7f5;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 0 14px;
+  min-height: 42px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #4a5560;
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
 }
 
 .wp-nav-btn:hover:not(:disabled) {
@@ -410,6 +333,9 @@ body {
   flex: 1;
   overflow-y: auto;
   padding-right: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 #photo-modal-scrollable::-webkit-scrollbar {
@@ -436,6 +362,23 @@ body {
   color: #475569;
   margin-bottom: 16px;
   white-space: pre-line;
+}
+
+/* 照片＋說明文案：預設（窄螢幕）上下堆疊，寬螢幕改左右並排（見下方 min-width:860px） */
+.photo-essay {
+  display: flex;
+  flex-direction: column;
+}
+
+.photo-essay-media {
+  flex-shrink: 0;
+}
+
+.photo-essay-text {
+  background: #fafbfa;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-top: 14px;
 }
 
 /* 照片展示區 */
@@ -604,29 +547,48 @@ body {
   transform: scale(1.2);
 }
 
-.photo-content-wrap {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 14px;
-  margin-bottom: 16px;
-  border-left: 3px solid var(--trail);
-}
-
-#photo-modal-photo-title,
-#elev-photo-title {
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: #1e293b;
-  margin-bottom: 6px;
-  line-height: 1.4;
-}
-
-#photo-modal-photo-body,
-#elev-photo-body {
-  font-size: 0.8rem;
-  color: #475569;
-  line-height: 1.6;
+/* 故事文字：中文長段落靠行距與字距撐開可讀性，不用色塊側線 */
+#photo-modal-photo-body {
+  font-size: 0.84rem;
+  color: #3f4a54;
+  line-height: 2.05;
+  letter-spacing: 0.03em;
   white-space: pre-wrap;
+  text-align: justify;
+}
+
+/* 照片彈窗：寬螢幕改成照片＋文字左右並排，兩者同時可見，長文字只在自己的欄位內捲動 */
+@media(min-width:860px) {
+  #photo-modal-box {
+    width: 920px;
+  }
+
+  .photo-essay {
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    gap: 20px;
+  }
+
+  .photo-essay-media {
+    flex: 1 1 55%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .photo-img-wrap {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
+
+  .photo-essay-text {
+    flex: 1 1 45%;
+    min-width: 0;
+    overflow-y: auto;
+    margin-top: 0;
+  }
 }
 
 /* 新增照片的彈窗 (Upload Modal) / 編輯地標的彈窗 (Edit Modal) / 編輯照片的彈窗 (Edit Photo Modal) */
@@ -667,6 +629,19 @@ body {
 
 #edit-modal-box {
   width: 520px;
+}
+
+/* 編輯照片：說明文案是主要輸入欄位，彈窗開大一點讓它有足夠書寫空間 */
+#edit-photo-modal-box,
+#upload-modal-box {
+  width: 620px;
+  max-height: 88vh;
+}
+
+#edit-photo-modal-box #edit-photo-body,
+#upload-modal-box #upload-body {
+  min-height: 260px;
+  line-height: 1.9;
 }
 
 .form-modal-header {
@@ -782,10 +757,6 @@ body {
   min-height: 80px;
 }
 
-.form-group textarea.tall {
-  min-height: 220px;
-}
-
 .btn-submit {
   background: var(--peak);
   color: #fff;
@@ -872,95 +843,91 @@ a.leaflet-popup-close-button {
   opacity: 1;
 }
 
-.drawer-toggle {
-  display: none;
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 950;
-  background: var(--forest);
-  color: #fff;
-  border: none;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  font-size: 1.4rem;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .3);
-  align-items: center;
-  justify-content: center;
-}
-
 @media(max-width:767px) {
-  .drawer-toggle {
-    display: flex;
-    z-index: 2600;
-  }
-
-  /* 側面板改為右下角按鈕直接切換的全螢幕彈窗，不再是貼底拖曳的抽屜 */
-  .side {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 1900;
-    height: auto;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .side.open {
-    display: flex;
-  }
-
-  .tabs {
-    display: none;
-  }
-
   /* 照片彈窗：縮小字級、圖片比例，讓一屏內能看到所有內容 */
   #photo-modal-box {
     padding: 14px;
     height: auto;
+    max-height: 92vh;
   }
 
-  /* 第一行：標題 + 關閉鈕（固定在右上角）；第二行：導覽/編輯鈕獨立一行，與關閉鈕距離拉開避免誤觸 */
+  /* 標題 + 編輯鈕在左，關閉鈕固定在右上角 */
   #photo-modal-header {
-    padding-bottom: 8px;
-    margin-bottom: 8px;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    row-gap: 6px;
+    padding-bottom: 10px;
+    align-items: center;
   }
 
   #photo-modal-title-wrap {
     padding-right: 8px;
-    flex-basis: auto;
   }
 
   #photo-modal-title {
-    font-size: 1rem;
-    margin-bottom: 2px;
+    font-size: 0.98rem;
+    gap: 8px;
+  }
+
+  /* 導覽鈕與地標數值併成同一列：距離／時間／海拔縮小後放到上一點與下一點中間。
+     用 display:contents 讓兩層容器的子元素直接變成同一個網格的項目，
+     整列只佔一個按鈕的高度，省下來的空間全給下方的照片與文字。 */
+  #wp-header-block {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  #photo-modal-nav,
+  #wp-profile-panel {
+    display: contents;
+  }
+
+  #wp-nav-prev {
+    grid-column: 1;
+    grid-row: 1;
   }
 
   #photo-modal-meta {
-    font-size: 0.68rem;
-    gap: 8px;
+    grid-column: 2;
+    grid-row: 1;
   }
 
-  /* 導覽/編輯鈕獨立佔滿第二行，靠左排列，遠離右上角的關閉鈕 */
-  #photo-modal-nav {
-    order: 3;
-    flex-basis: 100%;
+  #wp-nav-next {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  /* 手機螢幕不夠高，剖面圖先讓位給照片與文字 */
+  #wp-profile-panel .chart-container {
+    display: none;
+  }
+
+  .wp-stats {
     gap: 8px;
-    margin-right: 0;
+    flex-wrap: nowrap;
+    margin-bottom: 0;
+  }
+
+  .wp-stat,
+  .wp-stat:last-child {
+    align-items: center;
+    gap: 2px;
+  }
+
+  .wp-stat-label {
+    font-size: 0.52rem;
+    letter-spacing: 0.1em;
+  }
+
+  .wp-stat-value {
+    font-size: 0.74rem;
   }
 
   /* 關閉按鈕固定在標題列右上角 */
   #photo-modal-close {
-    order: 2;
     position: static;
     top: auto;
     right: auto;
-    margin-left: 0;
     flex-shrink: 0;
     font-size: 1.2rem;
     width: 40px;
@@ -970,10 +937,13 @@ a.leaflet-popup-close-button {
     justify-content: center;
   }
 
+  /* 導覽鈕縮成箭頭，但維持夠大的點擊範圍 */
   .wp-nav-btn {
-    font-size: 0.9rem;
-    padding: 6px 10px;
-    min-height: 36px;
+    flex: 0 0 auto;
+    min-width: 50px;
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 1.15rem;
   }
 
   .wp-nav-label {
@@ -986,29 +956,24 @@ a.leaflet-popup-close-button {
     line-height: 1.5;
   }
 
+  /* 剖面圖讓出來的空間全部給照片 */
   .photo-img-wrap {
-    height: 180px;
+    height: 300px;
   }
 
+  /* 手機上照片已有左右箭頭可翻頁，點點省下來給照片與文字更多空間 */
   .photo-dots-row {
-    margin: 6px 0 8px 0;
+    display: none;
   }
 
-  .photo-content-wrap {
-    padding: 10px;
-    margin-bottom: 10px;
+  .photo-essay-text {
+    padding: 13px 14px;
+    margin-top: 10px;
   }
 
-  #photo-modal-photo-title,
-  #elev-photo-title {
-    font-size: 0.8rem;
-    margin-bottom: 4px;
-  }
-
-  #photo-modal-photo-body,
-  #elev-photo-body {
-    font-size: 0.72rem;
-    line-height: 1.5;
+  #photo-modal-photo-body {
+    font-size: 0.78rem;
+    line-height: 1.9;
   }
 
   /* 頂部標題區：只保留一行標題，隱藏副標題與統計數字 */
@@ -1019,9 +984,5 @@ a.leaflet-popup-close-button {
   .header-title p,
   .header-stats {
     display: none;
-  }
-
-  .app {
-    height: calc(100vh - 42px);
   }
 }
