@@ -185,7 +185,7 @@ body {
   gap: 10px;
 }
 
-/* 編輯地標：緊貼在標題旁邊，與上一點／下一點分開 */
+/* 編輯地標：緊貼在標題旁邊，與上一張／下一張分開 */
 .title-edit-btn {
   background: none;
   border: none;
@@ -272,7 +272,7 @@ body {
   color: #23303a;
 }
 
-/* 上一點／下一點：獨立一列、左右各佔一半，做成好點的大按鈕 */
+/* 上一張／下一張：獨立一列、左右各佔一半，做成好點的大按鈕 */
 #photo-modal-nav {
   display: flex;
   gap: 10px;
@@ -844,11 +844,32 @@ a.leaflet-popup-close-button {
 }
 
 @media(max-width:767px) {
-  /* 照片彈窗：縮小字級、圖片比例，讓一屏內能看到所有內容 */
+  /* 彈窗高度固定，不隨文案長短變動：標題列、導覽列、照片永遠在同一個位置，
+     長短不一的故事文字只在自己的區塊內捲動 */
   #photo-modal-box {
     padding: 14px;
-    height: auto;
+    height: 92vh;
     max-height: 92vh;
+  }
+
+  /* 外層不捲動，改由文字區塊自己捲 */
+  #photo-modal-scrollable {
+    overflow: hidden;
+  }
+
+  .photo-essay {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .photo-essay-media {
+    flex-shrink: 0;
+  }
+
+  .photo-essay-text {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   /* 標題 + 編輯鈕在左，關閉鈕固定在右上角 */
@@ -866,7 +887,7 @@ a.leaflet-popup-close-button {
     gap: 8px;
   }
 
-  /* 導覽鈕與地標數值併成同一列：距離／時間／海拔縮小後放到上一點與下一點中間。
+  /* 導覽鈕與地標數值併成同一列：距離／時間／海拔縮小後放到上一張與下一張中間。
      用 display:contents 讓兩層容器的子元素直接變成同一個網格的項目，
      整列只佔一個按鈕的高度，省下來的空間全給下方的照片與文字。 */
   #wp-header-block {
@@ -956,9 +977,10 @@ a.leaflet-popup-close-button {
     line-height: 1.5;
   }
 
-  /* 剖面圖讓出來的空間全部給照片 */
+  /* 剖面圖讓出來的空間給照片。用 min() 讓小螢幕不會被照片擠掉文字區塊，
+     但同一台裝置上的高度是固定值，瀏覽時不會忽高忽低 */
   .photo-img-wrap {
-    height: 300px;
+    height: min(300px, 38vh);
   }
 
   /* 手機上照片已有左右箭頭可翻頁，點點省下來給照片與文字更多空間 */

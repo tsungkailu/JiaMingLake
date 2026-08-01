@@ -625,31 +625,12 @@ function initPhotoModal(){
     if(e.target === editPhotoModal) editPhotoModal.classList.remove('open');
   });
 
-  // 上一點 / 下一點地標導覽
-  document.getElementById('wp-nav-prev').addEventListener('click', function(){
-    var currIdx = WAYPOINTS.findIndex(function(w){ return w.order === currentWaypointOrder; });
-    if(currIdx > 0){
-      openPhotoModal(WAYPOINTS[currIdx - 1]);
-    }
-  });
-  document.getElementById('wp-nav-next').addEventListener('click', function(){
-    var currIdx = WAYPOINTS.findIndex(function(w){ return w.order === currentWaypointOrder; });
-    if(currIdx < WAYPOINTS.length - 1){
-      openPhotoModal(WAYPOINTS[currIdx + 1]);
-    }
-  });
-
-  // 照片切換
-  document.getElementById('photo-prev').addEventListener('click', function(){
-    if(currentPhotos.length < 2) return;
-    currentPhotoIdx = (currentPhotoIdx - 1 + currentPhotos.length) % currentPhotos.length;
-    renderPhoto();
-  });
-  document.getElementById('photo-next').addEventListener('click', function(){
-    if(currentPhotos.length < 2) return;
-    currentPhotoIdx = (currentPhotoIdx + 1) % currentPhotos.length;
-    renderPhoto();
-  });
+  // 上一張 / 下一張照片：走完目前地標的照片後會自動接到相鄰的地標
+  // 標題下方的大按鈕與照片上的左右箭頭走同一套邏輯
+  document.getElementById('wp-nav-prev').addEventListener('click', function(){ gotoPhotoStep(-1); });
+  document.getElementById('wp-nav-next').addEventListener('click', function(){ gotoPhotoStep(1); });
+  document.getElementById('photo-prev').addEventListener('click', function(){ gotoPhotoStep(-1); });
+  document.getElementById('photo-next').addEventListener('click', function(){ gotoPhotoStep(1); });
   document.addEventListener('keydown', function(e){
     if(uploadModal.classList.contains('open')) {
       if(e.key === 'Escape') uploadModal.classList.remove('open');
@@ -969,10 +950,10 @@ function initPhotoModal(){
   }
 }
 
-function openPhotoModal(wp){
+function openPhotoModal(wp, startIdx){
   var photos = WAYPOINT_PHOTOS[wp.order] || [];
   currentPhotos   = photos;
-  currentPhotoIdx = 0;
+  currentPhotoIdx = Math.max(0, Math.min(startIdx || 0, Math.max(0, photos.length - 1)));
   currentWaypointName = wp.name;
   currentWaypointOrder = wp.order;
 
@@ -1005,19 +986,10 @@ function openPhotoModal(wp){
 
   document.getElementById('photo-modal-desc').textContent = wp.desc || '';
 
-  // 上一點 / 下一點導覽按鈕啟用狀態
-  var currIdx = WAYPOINTS.findIndex(function(w){ return w.order === wp.order; });
-  var prevBtn = document.getElementById('wp-nav-prev');
-  var nextBtn = document.getElementById('wp-nav-next');
-  if(prevBtn) prevBtn.disabled = (currIdx <= 0);
-  if(nextBtn) nextBtn.disabled = (currIdx < 0 || currIdx >= WAYPOINTS.length - 1);
-
   if(photos.length === 0){
     showEmptyPhotoModal();
   } else {
     renderPhoto();
-    document.getElementById('photo-prev').style.display = photos.length > 1 ? 'flex' : 'none';
-    document.getElementById('photo-next').style.display = photos.length > 1 ? 'flex' : 'none';
   }
   photoModal.classList.add('open');
 
@@ -1047,8 +1019,7 @@ function showEmptyPhotoModal(){
   document.getElementById('photo-modal-img').alt        = '暫無照片';
   document.getElementById('photo-modal-dots').innerHTML  = '';
   document.getElementById('photo-modal-photo-body').textContent  = '請點擊下方按鈕新增照片至此地標。';
-  document.getElementById('photo-prev').style.display = 'none';
-  document.getElementById('photo-next').style.display = 'none';
+  updatePhotoNav();
 }
 
 // Optimistic UI：新增/編輯/刪除照片後，立刻用目前 WAYPOINT_PHOTOS 的內容重繪
@@ -1057,8 +1028,6 @@ function refreshActivePhotoView(targetIdx){
   currentPhotos = WAYPOINT_PHOTOS[currentWaypointOrder] || [];
   if (currentPhotos.length === 0) { showEmptyPhotoModal(); return; }
   currentPhotoIdx = Math.max(0, Math.min(targetIdx, currentPhotos.length - 1));
-  document.getElementById('photo-prev').style.display = currentPhotos.length > 1 ? 'flex' : 'none';
-  document.getElementById('photo-next').style.display = currentPhotos.length > 1 ? 'flex' : 'none';
   renderPhoto();
 }
 
@@ -1078,6 +1047,65 @@ function renderPhoto(){
     dot.addEventListener('click', function(){ currentPhotoIdx = idx; renderPhoto(); });
     dotsEl.appendChild(dot);
   });
+
+  updatePhotoNav();
+}
+
+// =====================================================================
+// 照片瀏覽：把所有地標的照片攤平成一條連續的序列，
+// 「上一張／下一張」走完目前地標的照片後就會自動接到下一個地標
+// =====================================================================
+function buildPhotoSequence(){
+  var seq = [];
+  WAYPOINTS.forEach(function(wp){
+    var photos = WAYPOINT_PHOTOS[wp.order] || [];
+    if(photos.length === 0){
+      // 還沒有照片的地標也留一個位置，才不會在瀏覽時被跳過而永遠到不了
+      seq.push({ order: wp.order, idx: 0 });
+      return;
+    }
+    photos.forEach(function(_, idx){ seq.push({ order: wp.order, idx: idx }); });
+  });
+  return seq;
+}
+
+function currentPhotoSeqPos(seq){
+  for(var i = 0; i < seq.length; i++){
+    if(seq[i].order === currentWaypointOrder && seq[i].idx === currentPhotoIdx) return i;
+  }
+  return -1;
+}
+
+function gotoPhotoStep(step){
+  var seq = buildPhotoSequence();
+  var pos = currentPhotoSeqPos(seq);
+  if(pos < 0) return;
+  var target = seq[pos + step];
+  if(!target) return; // 已經是第一張／最後一張，不循環
+
+  if(target.order === currentWaypointOrder){
+    currentPhotoIdx = target.idx;
+    renderPhoto();
+    return;
+  }
+  var wp = WAYPOINTS.find(function(w){ return w.order === target.order; });
+  if(wp) openPhotoModal(wp, target.idx);
+}
+
+// 依照目前位在整條照片序列的哪裡，更新導覽鈕與照片左右箭頭的可用狀態
+function updatePhotoNav(){
+  var seq = buildPhotoSequence();
+  var pos = currentPhotoSeqPos(seq);
+  var hasPrev = pos > 0;
+  var hasNext = pos >= 0 && pos < seq.length - 1;
+
+  var prevBtn = document.getElementById('wp-nav-prev');
+  var nextBtn = document.getElementById('wp-nav-next');
+  if(prevBtn) prevBtn.disabled = !hasPrev;
+  if(nextBtn) nextBtn.disabled = !hasNext;
+
+  document.getElementById('photo-prev').style.display = hasPrev ? 'flex' : 'none';
+  document.getElementById('photo-next').style.display = hasNext ? 'flex' : 'none';
 }
 
 // ── 更新地標座標之 API 請求 ─────────────────────────────────────────
