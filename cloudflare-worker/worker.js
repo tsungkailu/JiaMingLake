@@ -206,9 +206,12 @@ async function loadWaypointFiles(env, ref) {
 //   5. 更新分支時要求 fast-forward；若這期間有別的請求先 commit 了就會失敗，整個從步驟 1 重來
 // 這樣「讀到的版本」與「疊上去的版本」保證是同一個，不會有只寫一半或兩個檔案版本不一致的情況。
 // mutator 回傳 falsy 代表「找不到要改的地標/照片」，此時不會有任何寫入動作。
+//
+// extraFileChanges 可以是固定的陣列，也可以是一個函式 (mutationResult) => 陣列——
+// 有些操作 (例如換圖) 要等 mutator 找到照片、知道它實際的檔案路徑後，才能決定要寫哪個檔案，
+// 用函式就能在每次重試時都拿到那次讀到的最新內容算出來的路徑，不會用到過期的路徑。
 async function commitWaypointMutation(env, mutator, message, extraFileChanges, maxAttempts) {
   maxAttempts = maxAttempts || 5;
-  extraFileChanges = extraFileChanges || [];
   let lastErr;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const baseCommitSha = await ghGetHeadCommitSha(env);
@@ -216,7 +219,8 @@ async function commitWaypointMutation(env, mutator, message, extraFileChanges, m
     const result = mutator(files);
     if (!result) return null;
 
-    const fileChanges = extraFileChanges.concat([
+    const extras = typeof extraFileChanges === 'function' ? extraFileChanges(result) : (extraFileChanges || []);
+    const fileChanges = extras.concat([
       { path: 'waypoint.json', content: JSON.stringify(files.json, null, 2) },
       { path: 'waypoint-data.js', content: serializeWaypointDataJs(files.data) }
     ]);
@@ -292,10 +296,14 @@ async function handleUpload(env, payload) {
   // 前綴不再是 data:image/webp;base64,，所以這裡改成通用比對，不寫死格式。
   const base64Data = image.replace(/^data:[^;]*;base64,/, '');
 
+  // 每張照片都要有一個跟路徑無關的唯一 id：佔位圖等多張照片可能共用同一個
+  // 檔案路徑，如果編輯/刪除是用路徑去找，會抓到路徑相同的第一張、改錯照片。
+  const photoId = crypto.randomUUID();
+
   const result = await commitWaypointMutation(env, function (files) {
     const pair = findWaypointPair(files, waypointOrder, waypointName);
     if (!pair) return null;
-    const entry = { src: filePath, title: title || '', body: body || '' };
+    const entry = { src: filePath, title: title || '', body: body || '', id: photoId };
     if (!pair.json.photos) pair.json.photos = [];
     if (!pair.data.photos) pair.data.photos = [];
     pair.json.photos.push(entry);
@@ -306,50 +314,81 @@ async function handleUpload(env, payload) {
   ]);
 
   if (!result) return jsonResponse({ success: false, error: '找不到對應的地標' }, 404);
-  return jsonResponse({ success: true, src: filePath });
+  return jsonResponse({ success: true, src: filePath, id: photoId });
 }
 
 async function handleUpdatePhoto(env, payload) {
-  const { waypointName, waypointOrder, photoSrc, title, body, image } = payload;
-  if ((!waypointName && waypointOrder === undefined) || !photoSrc) {
-    return jsonResponse({ success: false, error: '缺少地標資訊或照片路徑' }, 400);
-  }
-  if (image && !photoSrc.startsWith('photos/')) {
-    return jsonResponse({ success: false, error: '不合法的照片路徑' }, 400);
+  const { waypointName, waypointOrder, photoId, title, body, image, ext } = payload;
+  if ((!waypointName && waypointOrder === undefined) || !photoId) {
+    return jsonResponse({ success: false, error: '缺少地標資訊或照片 id' }, 400);
   }
   const base64Data = image ? image.replace(/^data:[^;]*;base64,/, '') : null;
+  // 前端 canvas 若不支援輸出 webp 會自動退回 png，副檔名要跟著實際內容走，避免存成內容與副檔名不符的檔案
+  const safeExt = /^[a-z0-9]{1,5}$/.test(ext || '') ? ext : 'webp';
 
   const result = await commitWaypointMutation(env, function (files) {
     const pair = findWaypointPair(files, waypointOrder, waypointName);
     if (!pair || !pair.json.photos || !pair.data.photos) return null;
-    const photoJson = pair.json.photos.find(function (p) { return p.src === photoSrc; });
-    const photoData = pair.data.photos.find(function (p) { return p.src === photoSrc; });
+    const photoJson = pair.json.photos.find(function (p) { return p.id === photoId; });
+    const photoData = pair.data.photos.find(function (p) { return p.id === photoId; });
     if (!photoJson || !photoData) return null;
+
     if (title !== undefined) { photoJson.title = title; photoData.title = title; }
     if (body !== undefined) { photoJson.body = body; photoData.body = body; }
-    return photoJson;
-  }, '編輯照片: ' + photoSrc, base64Data ? [{ path: photoSrc, content: base64Data, isBase64: true }] : []);
+
+    // 換圖的路徑：如果這張照片目前的路徑是跟別人共用的 (例如還沒換掉的佔位圖)，
+    // 不能直接覆蓋原檔——那會連帶把其他還在用同一張圖的照片也換成這張新圖。
+    // 這種情況要另外開一個新檔案，只有這張照片自己在用時才可以直接覆蓋原檔。
+    let newImagePath = null;
+    if (base64Data) {
+      const sharedWithOthers = files.json.waypoints.some(function (w) {
+        return (w.photos || []).some(function (p) { return p !== photoJson && p.src === photoJson.src; });
+      });
+      newImagePath = sharedWithOthers
+        ? 'photos/' + (waypointName || 'photo').replace(/[^一-龥a-zA-Z0-9_-]/g, '') + '_' + Date.now() + '.' + safeExt
+        : photoJson.src;
+      photoJson.src = newImagePath;
+      photoData.src = newImagePath;
+    }
+
+    return { photoJson: photoJson, imagePath: newImagePath };
+  }, '編輯照片: id=' + photoId, function (mutationResult) {
+    return mutationResult.imagePath
+      ? [{ path: mutationResult.imagePath, content: base64Data, isBase64: true }]
+      : [];
+  });
 
   if (!result) return jsonResponse({ success: false, error: '找不到對應的地標或照片' }, 404);
-  return jsonResponse({ success: true });
+  return jsonResponse({ success: true, src: result.imagePath || undefined });
 }
 
 async function handleDeletePhoto(env, payload) {
-  const { waypointName, waypointOrder, photoSrc } = payload;
-  if ((!waypointName && waypointOrder === undefined) || !photoSrc) {
-    return jsonResponse({ success: false, error: '缺少地標資訊或照片路徑' }, 400);
+  const { waypointName, waypointOrder, photoId } = payload;
+  if ((!waypointName && waypointOrder === undefined) || !photoId) {
+    return jsonResponse({ success: false, error: '缺少地標資訊或照片 id' }, 400);
   }
 
   const result = await commitWaypointMutation(env, function (files) {
     const pair = findWaypointPair(files, waypointOrder, waypointName);
     if (!pair || !pair.json.photos || !pair.data.photos) return null;
-    const idxJson = pair.json.photos.findIndex(function (p) { return p.src === photoSrc; });
-    const idxData = pair.data.photos.findIndex(function (p) { return p.src === photoSrc; });
+    const idxJson = pair.json.photos.findIndex(function (p) { return p.id === photoId; });
+    const idxData = pair.data.photos.findIndex(function (p) { return p.id === photoId; });
     if (idxJson < 0 || idxData < 0) return null;
+
+    const deletedSrc = pair.json.photos[idxJson].src;
     pair.json.photos.splice(idxJson, 1);
     pair.data.photos.splice(idxData, 1);
-    return pair;
-  }, '刪除照片: ' + photoSrc, photoSrc.startsWith('photos/') ? [{ path: photoSrc, delete: true }] : []);
+
+    // 檔案路徑可能被其他照片共用 (例如都還沒換掉的佔位圖)，只有確定刪除這筆記錄後
+    // 已經沒有其他照片還在用同一個路徑，才把檔案從 repo 一併刪掉，
+    // 避免誤刪還在用的圖，同一個 commit 判斷才不會有版本不一致的問題。
+    const stillUsed = files.json.waypoints.some(function (w) {
+      return (w.photos || []).some(function (p) { return p.src === deletedSrc; });
+    });
+    return { deletedSrc: stillUsed ? null : deletedSrc };
+  }, '刪除照片: id=' + photoId, function (mutationResult) {
+    return mutationResult.deletedSrc ? [{ path: mutationResult.deletedSrc, delete: true }] : [];
+  });
 
   if (!result) return jsonResponse({ success: false, error: '找不到對應的地標或照片' }, 404);
   return jsonResponse({ success: true });
