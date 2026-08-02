@@ -394,6 +394,40 @@ async function handleDeletePhoto(env, payload) {
   return jsonResponse({ success: true });
 }
 
+async function handleReorderPhoto(env, payload) {
+  const { waypointName, waypointOrder, photoId, direction } = payload;
+  if ((!waypointName && waypointOrder === undefined) || !photoId) {
+    return jsonResponse({ success: false, error: '缺少地標資訊或照片 id' }, 400);
+  }
+  if (direction !== 'prev' && direction !== 'next') {
+    return jsonResponse({ success: false, error: 'direction 必須是 prev 或 next' }, 400);
+  }
+
+  const result = await commitWaypointMutation(env, function (files) {
+    const pair = findWaypointPair(files, waypointOrder, waypointName);
+    if (!pair || !pair.json.photos || !pair.data.photos) return null;
+    const idxJson = pair.json.photos.findIndex(function (p) { return p.id === photoId; });
+    const idxData = pair.data.photos.findIndex(function (p) { return p.id === photoId; });
+    if (idxJson < 0 || idxData < 0) return null;
+
+    const swapWith = idxJson + (direction === 'prev' ? -1 : 1);
+    // 已經是第一張／最後一張就不能再往那個方向移，回傳 null 讓外層當成「找不到」處理
+    if (swapWith < 0 || swapWith >= pair.json.photos.length) return null;
+
+    const tmpJson = pair.json.photos[idxJson];
+    pair.json.photos[idxJson] = pair.json.photos[swapWith];
+    pair.json.photos[swapWith] = tmpJson;
+    const tmpData = pair.data.photos[idxData];
+    pair.data.photos[idxData] = pair.data.photos[swapWith];
+    pair.data.photos[swapWith] = tmpData;
+
+    return pair;
+  }, '調整照片順序: id=' + photoId + ' ' + direction);
+
+  if (!result) return jsonResponse({ success: false, error: '找不到對應的地標／照片，或已經是最前／最後一張' }, 404);
+  return jsonResponse({ success: true });
+}
+
 async function handleUpdateWaypoint(env, payload) {
   const { waypointOrder, name, day, time, km, elevation, desc } = payload;
   if (waypointOrder === undefined) {
@@ -499,6 +533,8 @@ export default {
           return await handleUpdatePhoto(env, payload);
         case '/api/delete-photo':
           return await handleDeletePhoto(env, payload);
+        case '/api/reorder-photo':
+          return await handleReorderPhoto(env, payload);
         case '/api/update-waypoint':
           return await handleUpdateWaypoint(env, payload);
         case '/api/update-coords':

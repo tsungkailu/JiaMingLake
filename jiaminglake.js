@@ -117,6 +117,21 @@ function applyOnePatch(patch){
     delList.splice(idx, 1);
     return false;
   }
+  if(patch.type === 'reorder-photo'){
+    var reorderList = WAYPOINT_PHOTOS[patch.order] || [];
+    var alreadyLive = reorderList.length === patch.ids.length &&
+      reorderList.every(function(p, i){ return p.id === patch.ids[i]; });
+    if(!alreadyLive){
+      var byId = {};
+      reorderList.forEach(function(p){ byId[p.id] = p; });
+      var reordered = patch.ids.map(function(id){ return byId[id]; }).filter(Boolean);
+      // 萬一有本機還不知道的照片 (例如剛好同時有人上傳)，接在後面，不要憑空消失
+      reorderList.forEach(function(p){ if(reordered.indexOf(p) < 0) reordered.push(p); });
+      reorderList.length = 0;
+      Array.prototype.push.apply(reorderList, reordered);
+    }
+    return alreadyLive;
+  }
   if(patch.type === 'update-waypoint'){
     var wp = null;
     for(var j=0;j<WAYPOINTS.length;j++){ if(WAYPOINTS[j].order === patch.order){ wp = WAYPOINTS[j]; break; } }
@@ -611,6 +626,7 @@ function initPhotoModal(){
     document.getElementById('edit-photo-body').value  = photo.body  || '';
     document.getElementById('edit-photo-status').textContent = '';
     document.getElementById('edit-photo-status').className  = 'upload-status';
+    updateReorderButtons();
     editPhotoModal.classList.add('open');
   }
   var btnOpenEditPhoto = document.getElementById('photo-modal-edit-btn');
@@ -622,6 +638,67 @@ function initPhotoModal(){
     btnCloseEditPhoto.addEventListener('click', function(){
       editPhotoModal.classList.remove('open');
     });
+  }
+
+  // 照片順序：第一張不能再往前、最後一張不能再往後
+  function updateReorderButtons(){
+    var photos = getActivePhotos();
+    var idx = photos.findIndex(function(p){ return p.id === editingPhotoId; });
+    document.getElementById('edit-photo-position').textContent =
+      idx < 0 ? '' : '（第 ' + (idx + 1) + ' / ' + photos.length + ' 張）';
+    document.getElementById('edit-photo-move-prev').disabled = idx <= 0;
+    document.getElementById('edit-photo-move-next').disabled = idx < 0 || idx >= photos.length - 1;
+  }
+
+  function moveEditingPhoto(direction){
+    var photos = getActivePhotos();
+    var idx = photos.findIndex(function(p){ return p.id === editingPhotoId; });
+    var swapWith = idx + (direction === 'prev' ? -1 : 1);
+    if(idx < 0 || swapWith < 0 || swapWith >= photos.length) return;
+
+    // ── Optimistic UI：不等雲端同步，先在畫面上交換順序 ──
+    var tmp = photos[idx];
+    photos[idx] = photos[swapWith];
+    photos[swapWith] = tmp;
+    updateReorderButtons();
+    refreshActivePhotoView(swapWith);
+
+    var reorderUrl = resolveApiUrl('/api/reorder-photo');
+    fetch(reorderUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        waypointName: getActiveWaypointName(),
+        waypointOrder: getActiveWaypointOrder(),
+        photoId: editingPhotoId,
+        direction: direction
+      })
+    })
+    .then(function(res){ return res.json(); })
+    .then(function(res){
+      if(res.success){
+        addLocalPatch({
+          type: 'reorder-photo',
+          order: getActiveWaypointOrder(),
+          ids: photos.map(function(p){ return p.id; })
+        });
+        showSyncSuccessToast('照片順序已確實同步到 GitHub');
+      } else {
+        showSyncErrorToast('照片順序同步到 GitHub 失敗（畫面上仍看得到，但重新整理後會還原）: ' + res.error);
+      }
+    })
+    .catch(function(err){
+      showSyncErrorToast('照片順序同步到 GitHub 失敗（畫面上仍看得到，但重新整理後會還原）: ' + err);
+    });
+  }
+
+  var btnMovePrev = document.getElementById('edit-photo-move-prev');
+  if (btnMovePrev) {
+    btnMovePrev.addEventListener('click', function(){ moveEditingPhoto('prev'); });
+  }
+  var btnMoveNext = document.getElementById('edit-photo-move-next');
+  if (btnMoveNext) {
+    btnMoveNext.addEventListener('click', function(){ moveEditingPhoto('next'); });
   }
   editPhotoModal.addEventListener('click', function(e){
     if(e.target === editPhotoModal) editPhotoModal.classList.remove('open');
@@ -988,10 +1065,11 @@ function openPhotoModal(wp, startIdx){
   titleEl.appendChild(nameEl);
 
   // 距離／時間／海拔：與下方的高度剖面圖同屬一塊資訊面板
+  // 時間要帶上日期一起顯示 (例如 2026/07/18 09:00)，不然單看時間分不出是哪一天
   var metaEl = document.getElementById('photo-modal-meta');
   metaEl.innerHTML = '';
   appendStat(metaEl, '距離', wp.km);
-  appendStat(metaEl, '時間', wp.time);
+  appendStat(metaEl, '時間', (wp.date ? wp.date + ' ' : '') + (wp.time || ''));
   appendStat(metaEl, '海拔', wp.ele);
 
   document.getElementById('photo-modal-desc').textContent = wp.desc || '';
@@ -1028,6 +1106,7 @@ function showEmptyPhotoModal(){
   document.getElementById('photo-modal-img').src        = '';
   document.getElementById('photo-modal-img').alt        = '暫無照片';
   document.getElementById('photo-modal-dots').innerHTML  = '';
+  document.getElementById('photo-modal-photo-heading').textContent = currentWaypointName;
   document.getElementById('photo-modal-photo-body').textContent  = '請點擊下方按鈕新增照片至此地標。';
   updatePhotoNav();
 }
@@ -1047,6 +1126,7 @@ function renderPhoto(){
   document.getElementById('photo-modal-edit-btn').style.display   = 'flex';
   document.getElementById('photo-modal-img').src   = p.src;
   document.getElementById('photo-modal-img').alt   = p.title || '';
+  document.getElementById('photo-modal-photo-heading').textContent = currentWaypointName;
   document.getElementById('photo-modal-photo-body').textContent  = p.body  || '';
 
   var dotsEl = document.getElementById('photo-modal-dots');

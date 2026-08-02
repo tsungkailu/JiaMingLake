@@ -381,24 +381,24 @@ body {
   margin-top: 14px;
 }
 
-/* 照片展示區 */
+/* 照片展示區：照片統一是 16:9，用 aspect-ratio 讓容器直接貼合照片本身的比例，
+   不再用猜測的固定高度，兩者之間就不會有多餘的留白 */
 .photo-img-wrap {
   position: relative;
   background: #f8fafc;
   border: 1px solid #f1f5f9;
   border-radius: 12px;
   overflow: hidden;
-  height: 320px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
   flex-shrink: 0;
 }
 
 .photo-img-wrap img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 
@@ -547,6 +547,15 @@ body {
   transform: scale(1.2);
 }
 
+/* 手機版才顯示的粗體小標題，桌機版標題已經在上方夠明顯了，見下方 max-width:767px */
+.photo-heading {
+  display: none;
+  font-weight: 700;
+  font-size: 0.86rem;
+  color: var(--forest);
+  margin-bottom: 6px;
+}
+
 /* 故事文字：中文長段落靠行距與字距撐開可讀性，不用色塊側線 */
 #photo-modal-photo-body {
   font-size: 0.84rem;
@@ -557,16 +566,19 @@ body {
   text-align: justify;
 }
 
-/* 照片彈窗：寬螢幕改成照片＋文字左右並排，兩者同時可見，長文字只在自己的欄位內捲動 */
+/* 照片彈窗：寬螢幕改成照片＋文字左右並排，兩者同時可見，長文字只在自己的欄位內捲動。
+   照片統一是 16:9，讓照片欄位用 aspect-ratio 決定自己的高度，文字欄位用 flex 預設的
+   align-items:stretch 直接貼齊照片的高度，彈窗整體高度也改成跟著內容走 (auto)，
+   不再是猜測出來的固定值，兩邊就不會有多餘的空白。 */
 @media(min-width:860px) {
   #photo-modal-box {
     width: 920px;
+    height: auto;
+    max-height: 90vh;
   }
 
   .photo-essay {
     flex-direction: row;
-    flex: 1;
-    min-height: 0;
     gap: 20px;
   }
 
@@ -575,12 +587,6 @@ body {
     min-width: 0;
     display: flex;
     flex-direction: column;
-  }
-
-  .photo-img-wrap {
-    flex: 1;
-    height: auto;
-    min-height: 0;
   }
 
   .photo-essay-text {
@@ -727,6 +733,22 @@ body {
   margin-bottom: 6px;
 }
 
+.photo-position-hint {
+  font-weight: 400;
+  color: #9aa5ad;
+  margin-left: 6px;
+}
+
+.photo-reorder-row {
+  display: flex;
+  gap: 10px;
+}
+
+.photo-reorder-row .wp-nav-btn {
+  flex: 1;
+  min-height: 38px;
+}
+
 .form-group input[type="text"],
 .form-group textarea,
 .form-group input[type="file"],
@@ -845,11 +867,14 @@ a.leaflet-popup-close-button {
 
 @media(max-width:767px) {
   /* 彈窗高度固定，不隨文案長短變動：標題列、導覽列、照片永遠在同一個位置，
-     長短不一的故事文字只在自己的區塊內捲動 */
+     長短不一的故事文字只在自己的區塊內捲動。
+     縮小一點尺寸 (不是滿版)，讓彈窗外面可以點擊關閉的範圍大一些，比較好關。 */
   #photo-modal-box {
     padding: 14px;
-    height: 92vh;
-    max-height: 92vh;
+    width: 100%;
+    max-width: 86vw;
+    height: 82vh;
+    max-height: 82vh;
   }
 
   /* 外層不捲動，改由文字區塊自己捲 */
@@ -977,11 +1002,10 @@ a.leaflet-popup-close-button {
     line-height: 1.5;
   }
 
-  /* 剖面圖讓出來的空間給照片。用 min() 讓小螢幕不會被照片擠掉文字區塊，
-     但同一台裝置上的高度是固定值，瀏覽時不會忽高忽低 */
-  .photo-img-wrap {
-    height: min(300px, 38vh);
+  .photo-heading {
+    display: block;
   }
+
 
   /* 手機上照片已有左右箭頭可翻頁，點點省下來給照片與文字更多空間 */
   .photo-dots-row {
