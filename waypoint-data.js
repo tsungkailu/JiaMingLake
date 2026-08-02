@@ -335,7 +335,14 @@ var WAYPOINT_DATA = {
       "profile_ele": 2771,
       "title": "排球場營地",
       "desc": "",
-      "photos": [],
+      "photos": [
+        {
+          "src": "photos/排球場營地_1785634330190.webp",
+          "title": "",
+          "body": "爬升了近半公里後，我們來到了第一個運動場，排球場營地，這裡有平坦鬆軟的泥土地，鋪著舒服的針葉落葉地毯，在間疏有致的森林中，讓人格外覺得放鬆。",
+          "id": "c833fbe5-c6ad-46bd-a64b-04d81d131de5"
+        }
+      ],
       "spur": false,
       "spurReturn": false
     },
