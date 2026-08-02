@@ -966,7 +966,8 @@ a.leaflet-popup-close-button {
   }
 
   .wp-stat-value {
-    font-size: 0.74rem;
+    font-size: 0.64rem;
+    white-space: nowrap;
   }
 
   /* 關閉按鈕固定在標題列右上角 */

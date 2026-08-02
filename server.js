@@ -603,7 +603,19 @@ const server = http.createServer((req, res) => {
   }
 
   // 處理靜態檔案代理
-  let reqPath = req.url.split('?')[0];
+  // 瀏覽器請求非 ASCII 檔名 (中文照片檔名) 時網址一定會被 percent-encode，
+  // 例如 %E9%99%B3...，這裡沒解碼的話會直接去找一個檔名長這樣的檔案、當然找不到，
+  // 造成所有中文檔名的照片在本機一律 404 (外框看起來還是 16:9，因為那是 CSS
+  // 撐出來的，不代表圖片真的載入成功)。
+  let reqPath;
+  try {
+    reqPath = decodeURIComponent(req.url.split('?')[0]);
+  } catch (e) {
+    // 網址帶了不合法的 percent-encoding，當成找不到檔案處理，不要讓伺服器整個掛掉
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
   if (reqPath === '/') {
     reqPath = '/jiaminglake.html';
   }

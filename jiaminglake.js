@@ -914,18 +914,36 @@ function initPhotoModal(){
       .then(function(res){ return res.json(); })
       .then(function(res){
         if(res.success){
-          // 先把這次修改記錄下來，reload 後即使 GitHub Pages 還沒重新部署，
+          // 先把這次修改記錄下來，之後重新整理即使 GitHub Pages 還沒重新部署，
           // boot() 也會疊加這筆記錄，讓修改不會「看起來消失」。
           addLocalPatch({
             type: 'update-waypoint',
             order: currentWaypointOrder,
             fields: { name: nameVal, day: dayVal, time: timeVal, km: kmVal, elevation: eleVal }
           });
-          statusEl.textContent = '🎉 更新成功！已確實存檔，網頁即將重新整理...';
+
+          // ── 不整頁重新整理：直接更新記憶體中的資料，關掉編輯彈窗後回到照片彈窗 ──
+          var wp = WAYPOINTS.find(function(w){ return w.order === currentWaypointOrder; });
+          if(wp){
+            wp.name = nameVal;
+            wp.day  = dayVal;
+            wp.time = timeVal;
+            wp.km   = kmVal;
+            wp.ele  = eleVal;
+            // 天數有可能被改掉，「上一張／下一張」跨地標導覽是照 WAYPOINTS 的順序走，
+            // 要重新排序才會反映新的天數
+            WAYPOINTS.sort(function(a, b){
+              var di = DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day);
+              return di !== 0 ? di : (a.order || 0) - (b.order || 0);
+            });
+          }
+
+          statusEl.textContent = '🎉 更新成功！';
           statusEl.className = 'upload-status success';
           setTimeout(function(){
-            window.location.reload();
-          }, 1000);
+            editModal.classList.remove('open');
+            if(wp) openPhotoModal(wp, currentPhotoIdx);
+          }, 500);
         } else {
           statusEl.textContent = '❌ 更新失敗: ' + res.error;
           statusEl.className = 'upload-status error';
@@ -1196,6 +1214,20 @@ function updatePhotoNav(){
 
   document.getElementById('photo-prev').style.display = hasPrev ? 'flex' : 'none';
   document.getElementById('photo-next').style.display = hasNext ? 'flex' : 'none';
+
+  // 預先載入上一張／下一張的圖片，切換時瀏覽器已經有快取，不必臨時等下載
+  preloadPhotoAt(seq, pos - 1);
+  preloadPhotoAt(seq, pos + 1);
+}
+
+function preloadPhotoAt(seq, pos){
+  var target = seq[pos];
+  if(!target) return;
+  var photos = WAYPOINT_PHOTOS[target.order] || [];
+  var photo = photos[target.idx];
+  if(!photo || !photo.src) return;
+  var img = new Image();
+  img.src = photo.src;
 }
 
 // ── 更新地標座標之 API 請求 ─────────────────────────────────────────
