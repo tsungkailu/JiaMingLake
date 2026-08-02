@@ -828,7 +828,7 @@ var WAYPOINT_DATA = {
       "desc": "",
       "photos": [
         {
-          "src": "photos/placeholder.svg",
+          "src": "photos/黑水塘_1785631821748.webp",
           "title": "",
           "body": "不小心拐錯了彎，歪打正著的走到了黑水塘，這是許多野生動物賴以為生的水源，我們沒有多做打擾就先行離開",
           "id": "c6156d14b2"
