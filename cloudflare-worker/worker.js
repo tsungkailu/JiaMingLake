@@ -281,8 +281,15 @@ async function downloadFromDrive(url, redirectsLeft) {
 // ---------------------------------------------------------------------
 // 路由
 // ---------------------------------------------------------------------
+// 找出要插入的位置：插在 afterId 那張的後面，找不到 (null 或已經不在了) 就加到最後面
+function findInsertIndex(photos, afterId) {
+  if (!afterId) return photos.length;
+  const idx = photos.findIndex(function (p) { return p.id === afterId; });
+  return idx < 0 ? photos.length : idx + 1;
+}
+
 async function handleUpload(env, payload) {
-  const { waypointName, waypointOrder, title, body, image, ext } = payload;
+  const { waypointName, waypointOrder, title, body, image, ext, insertAfterId } = payload;
   if ((!waypointName && waypointOrder === undefined) || !image) {
     return jsonResponse({ success: false, error: '缺少地標資訊或圖片資料' }, 400);
   }
@@ -306,8 +313,9 @@ async function handleUpload(env, payload) {
     const entry = { src: filePath, title: title || '', body: body || '', id: photoId };
     if (!pair.json.photos) pair.json.photos = [];
     if (!pair.data.photos) pair.data.photos = [];
-    pair.json.photos.push(entry);
-    pair.data.photos.push(Object.assign({}, entry));
+    // 插在使用者按＋號當下正在看的那一張後面，不是永遠加到最後面
+    pair.json.photos.splice(findInsertIndex(pair.json.photos, insertAfterId), 0, entry);
+    pair.data.photos.splice(findInsertIndex(pair.data.photos, insertAfterId), 0, Object.assign({}, entry));
     return pair;
   }, '新增地標照片: ' + waypointName, [
     { path: filePath, content: base64Data, isBase64: true }

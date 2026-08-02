@@ -163,7 +163,7 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const payload = JSON.parse(body);
-        const { waypointName, waypointOrder, title, body: desc, image, ext } = payload;
+        const { waypointName, waypointOrder, title, body: desc, image, ext, insertAfterId } = payload;
 
         if ((!waypointName && waypointOrder === undefined) || !image) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -211,8 +211,12 @@ const server = http.createServer((req, res) => {
         // 檔案路徑，如果編輯/刪除是用路徑去找，會抓到路徑相同的第一張、改錯照片。
         const photoId = crypto.randomUUID();
 
-        // 新增照片項目
-        wp.photos.push({
+        // 插在使用者按＋號當下正在看的那一張後面，不是永遠加到最後面；
+        // 找不到對象 (null 或已經不在了) 就退回加到最後面
+        const insertIdx = insertAfterId
+          ? (function () { const i = wp.photos.findIndex(p => p.id === insertAfterId); return i < 0 ? wp.photos.length : i + 1; })()
+          : wp.photos.length;
+        wp.photos.splice(insertIdx, 0, {
           src: `photos/${filename}`,
           title: title || '',
           body: desc || '',

@@ -29,6 +29,8 @@ var currentPhotoIdx = 0;
 var currentWaypointName = '';
 var currentWaypointOrder = null;
 var editingPhotoId = null;
+// 按「新增照片」當下正在看哪一張，新照片要插進它後面，而不是永遠加到最後面
+var uploadInsertAfterId = null;
 
 // 上傳／編輯／刪除彈窗都是對「目前照片彈窗裡正在看的那一張」操作
 function getActivePhotos(){ return currentPhotos; }
@@ -92,12 +94,21 @@ function applyLocalPatches(){
   saveLocalPatches(stillPending);
 }
 
+// 新照片要插進「按下＋號當下正在看的那一張」後面，不是永遠加到最後面；
+// 找不到對象 (id 是 null，或那張已經不在了) 就退回加到最後面
+function findInsertIndex(photos, afterId){
+  if(!afterId) return photos.length;
+  var idx = -1;
+  for(var i=0;i<photos.length;i++){ if(photos[i].id === afterId){ idx = i; break; } }
+  return idx < 0 ? photos.length : idx + 1;
+}
+
 // 回傳 true 代表「bundled 資料已經跟這筆變更一致了」，可以把這筆記錄丟掉
 function applyOnePatch(patch){
   if(patch.type === 'add-photo'){
     var list = WAYPOINT_PHOTOS[patch.order] || (WAYPOINT_PHOTOS[patch.order] = []);
     var alreadyLive = list.some(function(p){ return p.id && p.id === patch.photo.id; });
-    if(!alreadyLive) list.push(patch.photo);
+    if(!alreadyLive) list.splice(findInsertIndex(list, patch.insertAfterId), 0, patch.photo);
     return alreadyLive;
   }
   if(patch.type === 'edit-photo'){
@@ -570,6 +581,8 @@ function initPhotoModal(){
   var btnOpenUpload = document.getElementById('btn-open-upload-modal');
   if (btnOpenUpload) {
     btnOpenUpload.addEventListener('click', function(){
+      var current = currentPhotos[currentPhotoIdx];
+      uploadInsertAfterId = current ? current.id : null;
       resetUploadForm();
       uploadModal.classList.add('open');
     });
@@ -758,13 +771,16 @@ function initPhotoModal(){
           var bodyVal  = document.getElementById('upload-body').value.trim();
           var waypointName  = getActiveWaypointName();
           var waypointOrder = getActiveWaypointOrder();
+          var insertAfterId = uploadInsertAfterId;
 
           // ── Optimistic UI：不等雲端同步，先把照片加進本地資料立刻顯示 ──
-          // id 要等伺服器回應才會有，同步完成前不能編輯/刪除這張照片
+          // id 要等伺服器回應才會有，同步完成前不能編輯/刪除這張照片。
+          // 插在「按＋號當下正在看的那一張」後面，不是永遠加到最後面。
           var newPhoto = { src: webpBase64, title: '', body: bodyVal, id: null, _realSrc: null };
           if (!WAYPOINT_PHOTOS[waypointOrder]) WAYPOINT_PHOTOS[waypointOrder] = [];
-          WAYPOINT_PHOTOS[waypointOrder].push(newPhoto);
-          refreshActivePhotoView(WAYPOINT_PHOTOS[waypointOrder].length - 1);
+          var insertIdx = findInsertIndex(WAYPOINT_PHOTOS[waypointOrder], insertAfterId);
+          WAYPOINT_PHOTOS[waypointOrder].splice(insertIdx, 0, newPhoto);
+          refreshActivePhotoView(insertIdx);
 
           statusEl.textContent = '✅ 已顯示在畫面上！背景同步到 GitHub 中...';
           statusEl.className = 'upload-status success';
@@ -782,7 +798,8 @@ function initPhotoModal(){
               waypointOrder: waypointOrder,
               body: bodyVal,
               image: webpBase64,
-              ext: ext
+              ext: ext,
+              insertAfterId: insertAfterId
             })
           })
           .then(function(res){ return res.json(); })
@@ -794,6 +811,7 @@ function initPhotoModal(){
               addLocalPatch({
                 type: 'add-photo',
                 order: waypointOrder,
+                insertAfterId: insertAfterId,
                 photo: { src: newPhoto.src, title: newPhoto.title, body: newPhoto.body, id: newPhoto.id, _realSrc: newPhoto._realSrc }
               });
               showSyncSuccessToast('照片已確實存檔到 GitHub，重新整理也看得到');
@@ -1079,6 +1097,8 @@ function openPhotoModal(wp, startIdx){
   badge.textContent = wp.day;
   var nameEl = document.createElement('span');
   nameEl.textContent = wp.name;
+  // 標題文字顏色跟著天數走，跟 D0/D1 標籤底色同一套色票，一眼看出屬於哪一天
+  nameEl.style.color = dayColors[wp.day] || '';
   titleEl.appendChild(badge);
   titleEl.appendChild(nameEl);
 
@@ -1118,13 +1138,21 @@ function appendStat(container, label, value){
   container.appendChild(stat);
 }
 
+// 手機版才會顯示的粗體小標題，顏色跟主標題一樣跟著天數走
+function setPhotoHeading(){
+  var heading = document.getElementById('photo-modal-photo-heading');
+  heading.textContent = currentWaypointName;
+  var wp = WAYPOINTS.find(function(w){ return w.order === currentWaypointOrder; });
+  heading.style.color = (wp && dayColors[wp.day]) || '';
+}
+
 function showEmptyPhotoModal(){
   document.getElementById('photo-modal-delete-btn').style.display = 'none';
   document.getElementById('photo-modal-edit-btn').style.display   = 'none';
   document.getElementById('photo-modal-img').src        = '';
   document.getElementById('photo-modal-img').alt        = '暫無照片';
   document.getElementById('photo-modal-dots').innerHTML  = '';
-  document.getElementById('photo-modal-photo-heading').textContent = currentWaypointName;
+  setPhotoHeading();
   document.getElementById('photo-modal-photo-body').textContent  = '請點擊下方按鈕新增照片至此地標。';
   updatePhotoNav();
 }
@@ -1144,7 +1172,7 @@ function renderPhoto(){
   document.getElementById('photo-modal-edit-btn').style.display   = 'flex';
   document.getElementById('photo-modal-img').src   = p.src;
   document.getElementById('photo-modal-img').alt   = p.title || '';
-  document.getElementById('photo-modal-photo-heading').textContent = currentWaypointName;
+  setPhotoHeading();
   document.getElementById('photo-modal-photo-body').textContent  = p.body  || '';
 
   var dotsEl = document.getElementById('photo-modal-dots');
