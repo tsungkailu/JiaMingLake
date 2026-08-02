@@ -565,16 +565,16 @@ var WAYPOINT_DATA = {
           "id": "bf3b3a4d5b"
         },
         {
-          "src": "photos/嘉明湖_1785640257833.webp",
-          "title": "",
-          "body": "嘉明湖日出！超美！",
-          "id": "64d0f3b5-bc19-4eb9-9b21-03617f594589"
-        },
-        {
           "src": "photos/嘉明湖_1785637970295.webp",
           "title": "",
           "body": "終於抵達嘉明湖",
           "id": "3859b0a5-b482-4c52-a2ee-9478e53b069a"
+        },
+        {
+          "src": "photos/嘉明湖_1785640257833.webp",
+          "title": "",
+          "body": "嘉明湖日出！超美！",
+          "id": "64d0f3b5-bc19-4eb9-9b21-03617f594589"
         },
         {
           "src": "photos/嘉明湖_1785640331828.webp",
