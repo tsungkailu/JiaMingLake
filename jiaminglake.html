@@ -81,6 +81,8 @@
 
         <!-- 照片段落文案 -->
         <div class="photo-essay-text">
+          <!-- 只在手機版顯示：粗體地標名稱，跟文案放在一起，桌機版標題已經在上方夠明顯了 -->
+          <div id="photo-modal-photo-heading" class="photo-heading"></div>
           <div id="photo-modal-photo-body"></div>
         </div>
       </div>
@@ -170,6 +172,13 @@
       <button id="edit-photo-modal-close" aria-label="關閉">✕</button>
     </div>
     <div class="form-modal-scrollable">
+      <div class="form-group">
+        <label>照片順序<span id="edit-photo-position" class="photo-position-hint"></span></label>
+        <div class="photo-reorder-row">
+          <button type="button" id="edit-photo-move-prev" class="wp-nav-btn">‹ 往前移</button>
+          <button type="button" id="edit-photo-move-next" class="wp-nav-btn">往後移 ›</button>
+        </div>
+      </div>
       <div class="form-group">
         <label for="edit-photo-image">更換照片（選填，留空則保留原圖）</label>
         <input type="file" id="edit-photo-image" accept="image/*" />

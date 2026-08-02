@@ -316,6 +316,79 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 處理調整照片順序的 API
+  if (req.method === 'POST' && req.url === '/api/reorder-photo') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body);
+        const { waypointName, waypointOrder, photoId, direction } = payload;
+
+        if ((!waypointName && waypointOrder === undefined) || !photoId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: '缺少地標資訊或照片 id' }));
+          return;
+        }
+        if (direction !== 'prev' && direction !== 'next') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'direction 必須是 prev 或 next' }));
+          return;
+        }
+
+        const jsonPath = path.join(PUBLIC_DIR, 'waypoint.json');
+        if (!fs.existsSync(jsonPath)) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: '找不到 waypoint.json 檔案' }));
+          return;
+        }
+
+        const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+        const wp = (waypointOrder !== undefined)
+          ? data.waypoints.find(w => w.order === parseInt(waypointOrder))
+          : data.waypoints.find(w => w.name === waypointName);
+        if (!wp || !wp.photos) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: '找不到對應的地標或照片' }));
+          return;
+        }
+
+        const idx = wp.photos.findIndex(p => p.id === photoId);
+        if (idx < 0) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: '找不到對應的照片' }));
+          return;
+        }
+
+        const swapWith = idx + (direction === 'prev' ? -1 : 1);
+        if (swapWith < 0 || swapWith >= wp.photos.length) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: '已經是最前／最後一張了' }));
+          return;
+        }
+
+        const tmp = wp.photos[idx];
+        wp.photos[idx] = wp.photos[swapWith];
+        wp.photos[swapWith] = tmp;
+
+        fs.writeFileSync(jsonPath, JSON.stringify(data, null, 2), 'utf-8');
+        console.log(`[Server] 已調整照片順序: id=${photoId} ${direction}`);
+
+        console.log('[Server] 正在執行 node build.js...');
+        execSync('node build.js', { cwd: PUBLIC_DIR });
+        console.log('[Server] build.js 執行成功');
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      } catch (err) {
+        console.error('[Server] 調整順序錯誤:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
   // 處理更新標記點座標的 API
   if (req.method === 'POST' && req.url === '/api/update-coords') {
     let body = '';
